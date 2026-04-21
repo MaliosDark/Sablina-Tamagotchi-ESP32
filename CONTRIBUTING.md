@@ -6,9 +6,9 @@ Thank you for your interest in contributing! This document explains how to get i
 
 ## Before You Start
 
-- Read the [Code of Conduct](CODE_OF_CONDUCT.md) — all contributors are expected to follow it
-- Check the [Security Policy](SECURITY.md) before reporting anything security-related — **do not open public issues for vulnerabilities**
-- Review the [Disclaimer](DISCLAIMER.md) — contributions to the WiFi audit module must comply with applicable laws in your jurisdiction
+- Read the [Code of Conduct](CODE_OF_CONDUCT.md), all contributors are expected to follow it
+- Check the [Security Policy](SECURITY.md) before reporting anything security-related, **do not open public issues for vulnerabilities**
+- Review the [Disclaimer](DISCLAIMER.md), contributions to the WiFi audit module must comply with applicable laws in your jurisdiction
 
 ---
 
@@ -21,7 +21,7 @@ Thank you for your interest in contributing! This document explains how to get i
 | 🔧 Code fixes & features | Fork → branch → PR (see below) |
 | 📖 Documentation | Edit Markdown files, improve README sections |
 | 🎨 Sprites & art | Add sprite arrays (`.h` files) following the existing format |
-| 🔒 Security issues | Use [GitHub Security Advisories](SECURITY.md) — **not** public issues |
+| 🔒 Security issues | Use [GitHub Security Advisories](SECURITY.md), **not** public issues |
 
 ---
 
@@ -34,7 +34,7 @@ Thank you for your interest in contributing! This document explains how to get i
    - `ArduinoJson` ≥ 7
    - `TFT_eSPI`
    - `NimBLE-Arduino`
-3. Copy `SablinaTamagotchi_2.0/secrets.h.example` → `SablinaTamagotchi_2.0/secrets.h` and fill in your credentials — **never commit this file**
+3. Copy `SablinaTamagotchi_2.0/secrets.h.example` → `SablinaTamagotchi_2.0/secrets.h` and fill in your credentials, **never commit this file**
 4. Select board: **ESP32S3 Dev Module** (or your specific board)
 5. Build and upload
 
@@ -59,7 +59,7 @@ Open `http://localhost:8080/simulator/` in your browser.
    ```bash
    git checkout -b fix/short-description
    ```
-2. Keep changes **focused** — one logical change per PR; avoid mixing unrelated fixes
+2. Keep changes **focused**, one logical change per PR; avoid mixing unrelated fixes
 3. **Test your changes:**
    - Firmware: compile cleanly with Arduino IDE (zero warnings preferred)
    - Simulator: verify the simulator loads and the changed feature works in-browser

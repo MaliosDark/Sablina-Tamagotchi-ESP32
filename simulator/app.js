@@ -1495,7 +1495,7 @@ function updateDeath(nowMs) {
     if (state.engine.criticalStatMs === 0) {
       state.engine.criticalStatMs = nowMs;
       const who = state.hun <= 5 ? "starving" : state.fat <= 5 ? "exhausted" : "filthy";
-      state.bubble = `${state.name} is ${who} — critical condition!`;
+      state.bubble = `${state.name} is ${who}, critical condition!`;
       sfxWarn();
       triggerVibration(500);
     }

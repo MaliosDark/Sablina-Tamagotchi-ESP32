@@ -1,6 +1,6 @@
 #pragma once
 // ═══════════════════════════════════════════════════════════════════
-//  Tiny-Sable Telegram Bot — Interactive Edition
+//  Tiny-Sable Telegram Bot, Interactive Edition
 //  ─────────────────────────────────────────────────────────────────
 //  Features
 //    • Chat with Sablina via LLM (any OpenAI-compatible API)
@@ -14,9 +14,9 @@
 //    • Persists update_id offset in NVS (no replay on reboot)
 //  ─────────────────────────────────────────────────────────────────
 //  Security
-//    • api.telegram.org calls use TLS encryption (setInsecure — ESP32
+//    • api.telegram.org calls use TLS encryption (setInsecure, ESP32
 //      does not have a system root store; DigiCert cert not pre-bundled)
-//    • User LLM endpoints use setInsecure() — self-signed certs are
+//    • User LLM endpoints use setInsecure(), self-signed certs are
 //      common on home servers; set TG_LLM_VERIFY_TLS 1 to enable
 //    • LLM endpoint validated: must be https:// or http://localhost
 //    • Incoming messages capped at TG_MAX_MSG_LEN to prevent DoS
@@ -588,7 +588,7 @@ private:
   //  HTTP LAYER
   // ════════════════════════════════════════════════════════════════
 
-  // ── Telegram API requests — TLS encrypted ────────────────────────
+  // ── Telegram API requests, TLS encrypted ────────────────────────
   // api.telegram.org uses DigiCert (not the previously-pinned GoDaddy G2).
   // setInsecure() keeps the connection TLS-encrypted without certificate
   // chain verification, which is the standard approach for ESP32 bots.
@@ -667,7 +667,7 @@ private:
            rest.startsWith("[::1]");
   }
 
-  // ── getUpdates — also extracts callback_query data ───────────────
+  // ── getUpdates, also extracts callback_query data ───────────────
   bool _pollTelegram(char* msgOut, size_t msgLen,
                      char* cbDataOut, size_t cbLen,
                      int64_t* cbMsgIdOut) {
@@ -722,7 +722,7 @@ private:
       // Auto-register first sender; reject all others once registered
       if (_chatId == 0) setAllowedChatId(fromId);
       if (fromId != _chatId) continue;               // strict: drop unknown IDs
-      // Cap message length — DoS guard
+      // Cap message length, DoS guard
       if (strlen(text) > TG_MAX_MSG_LEN) continue;
       strlcpy(msgOut, text, msgLen);
       got = true;
@@ -763,7 +763,7 @@ private:
     JsonDocument req;
     req["chat_id"] = _chatId;
     req["text"]    = text;
-    // Embed the pre-built keyboard JSON raw — parse it back in
+    // Embed the pre-built keyboard JSON raw, parse it back in
     JsonDocument kbDoc;
     if (deserializeJson(kbDoc, replyMarkupJson) == DeserializationError::Ok)
       req["reply_markup"] = kbDoc.as<JsonObject>();

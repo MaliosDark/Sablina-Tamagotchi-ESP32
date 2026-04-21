@@ -45,6 +45,8 @@
 
 ## 🔍 Overview
 
+<img src="Photos/simulator/Sablina.jpg" align="right" width="220" alt="Sablina" style="margin-left:20px; margin-bottom:10px; border-radius:8px;">
+
 Sablina Tamagotchi is a dual-purpose ESP32-S3 device: a fully-featured virtual pet **and** a WiFi security auditing tool inspired by [Pwnagotchi](https://pwnagotchi.ai/). While you care for your pixel pet, the device passively monitors 802.11 traffic, captures WPA handshakes, extracts PMKIDs, and can perform targeted deauthentication attacks, all through a cute interface on a 1.47" IPS display.
 
 The project includes three firmware variants and a full browser-based simulator:

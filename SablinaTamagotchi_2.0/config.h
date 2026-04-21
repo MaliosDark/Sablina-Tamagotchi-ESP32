@@ -166,7 +166,7 @@ const int BRIGHT_LEVELS[] = {10, 40, 80, 130, 200, 245};
 //   https://docs.espressif.com/projects/esp-idf/en/latest/esp32s3/api-reference/storage/nvs_flash.html#nvs-encryption
 // Generate an NVS encryption key partition and flash it separately; it is
 // stored in a key-partition protected by eFuse BLOCK_KEY0 (HMAC-based scheme
-// supported on ESP32-S3).  The Arduino IDE does not automate this — use
+// supported on ESP32-S3).  The Arduino IDE does not automate this, use
 // ESP-IDF or PlatformIO for production builds if credential protection is
 // required.
 #define NVS_TG_TOKEN         "tg_token"
