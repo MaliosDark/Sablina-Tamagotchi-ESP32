@@ -11,6 +11,7 @@
 [![WiFi Audit](https://img.shields.io/badge/WiFi-Deauth_%7C_PMKID_%7C_Handshake-ff0000.svg)](#-wifi-security-audit)
 [![Sprites](https://img.shields.io/badge/Sprites-65_Animated-ff69b4.svg)](#display--navigation)
 [![Simulator](https://img.shields.io/badge/Simulator-Browser_Based-4CAF50.svg)](#simulator)
+[![Hardware](https://img.shields.io/badge/Hardware-Untested_on_real_device-orange.svg)](#hardware)
 
 <br/>
 
@@ -25,7 +26,6 @@
 ## 📑 Table of Contents
 
 - [Overview](#-overview)
-- [WiFi Security Audit](#-wifi-security-audit)
 - [ReAct Hybrid Agent](#-react-hybrid-agent)
 - [Social Memory & Bond System](#-social-memory--bond-system)
 - [Telegram Bot](#-telegram-bot)
@@ -74,9 +74,12 @@ The project includes three firmware variants and a full browser-based simulator:
 
 ---
 
-## ☠️ WiFi Security Audit
+<details>
+<summary>☠️ WiFi Security Audit</summary>
 
-The WiFi audit module turns Sablina into a portable 802.11 security tool. It uses the ESP32's native promiscuous mode and raw frame injection, no external tools needed.
+> **For authorized penetration testing and educational purposes only.**
+
+The WiFi audit module uses the ESP32's native promiscuous mode and raw frame injection, no external tools needed.
 
 ### How It Works
 
@@ -116,9 +119,9 @@ After deauthentication, the client reconnects and performs the WPA 4-way handsha
 
 ```mermaid
 sequenceDiagram
-    participant S as ☠️ Sablina
-    participant AP as 📡 Access Point
-    participant C as 📱 Client
+    participant S as Sablina
+    participant AP as Access Point
+    participant C as Client
 
     S->>C: Deauth frame (reason: 1)
     Note over C: Client disconnects
@@ -129,14 +132,14 @@ sequenceDiagram
     rect rgb(40, 0, 0)
     Note over AP,C: WPA 4-Way Handshake (EAPOL)
     AP->>C: Message 1 (ANonce)
-    S-->>S: 📡 Capture M1
+    S-->>S: Capture M1
     C->>AP: Message 2 (SNonce + MIC)
-    S-->>S: 📡 Capture M2
+    S-->>S: Capture M2
     AP->>C: Message 3 (GTK)
     C->>AP: Message 4 (ACK)
     end
 
-    Note over S: ✅ M1 + M2 = crackable handshake
+    Note over S: M1 + M2 = crackable handshake
     S->>S: Export as hc22000 for hashcat
 ```
 
@@ -153,7 +156,7 @@ Only **M1 + M2** are needed to crack the password offline with hashcat.
 
 #### 3. PMKID Attack (Clientless)
 
-The PMKID attack is **more elegant** than handshake capture because it doesn't require a connected client or deauthentication. The PMKID is present in the RSN Information Element of the AP's first EAPOL message or association response:
+The PMKID attack does not require a connected client or deauthentication. The PMKID is present in the RSN Information Element of the AP's first EAPOL message or association response:
 
 ```
 PMKID = HMAC-SHA1-128(PMK, "PMK Name" || MAC_AP || MAC_STA)
@@ -191,6 +194,8 @@ hashcat -m 22000 capture.hc22000 wordlist.txt
 # Or use hashcat rules
 hashcat -m 22000 capture.hc22000 wordlist.txt -r rules/best64.rule
 ```
+
+</details>
 
 ---
 
@@ -232,7 +237,7 @@ The agent selects tools in strict priority order. Colors group tools by category
 flowchart TD
     START(["📡 Current State"])
 
-    subgraph CARE ["🟢 Pet Care,Critical Needs"]
+    subgraph CARE ["Pet Care - Critical Needs"]
         C1{"hunger < 30?"}
         C2{"rest < 30?"}
         C3{"hygiene < 30?"}
