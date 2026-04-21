@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content-Security-Policy: restrict resource loading to self + known CDN;
+         connect-src allows the local WiFi scan server only. -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                   script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com;
+                   style-src  'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+                   font-src   'self' https://fonts.gstatic.com;
+                   img-src    'self' data: blob:;
+                   connect-src 'self' http://127.0.0.1:3210;
+                   frame-ancestors 'none';" />
+    <title>Sablina Tamagotchi 2.0 Simulator</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="layout">
+      <section class="screen-wrap">
+        <h1>Sablina Tamagotchi 2.0 <a href="./tools.html" style="font-size:.65rem;font-weight:600;padding:4px 10px;border-radius:8px;background:rgba(124,58,237,.18);border:1px solid rgba(124,58,237,.4);color:#a855f7;text-decoration:none;vertical-align:middle;margin-left:8px;" title="Animation Studio">✨ Studio</a></h1>
+        <p class="subtitle">Autonomous engine, mood/stage, WiFi food hunting, environment, and persistent settings</p>
+        <canvas id="lcd" width="320" height="172" aria-label="Simulated display"></canvas>
+
+        <div class="zoom-bar">
+          <span class="zoom-label">Display Size:</span>
+          <button class="zoom-btn active" data-scale="full">Full</button>
+          <button class="zoom-btn" data-scale="lg">Large</button>
+          <button class="zoom-btn" data-scale="md">Medium</button>
+          <button class="zoom-btn" data-scale="sm">Small</button>
+          <button class="zoom-btn" data-scale="real">Real (1.47")</button>
+          <span class="zoom-info" id="zoomInfo">Scaled up for visibility</span>
+          <button id="canvasPanelToggle" class="zoom-btn" title="Hide/show device info panel">✕ Panel</button>
+        </div>
+      </section>
+
+      <section class="controls">
+        <h2>Control Center <button id="sidebarToggle" class="sidebar-toggle" title="Focus mode">▶</button></h2>
+
+        <div class="group">
+          <h3>2-Button Hardware Mode</h3>
+          <p class="hint">BTN B = next option, BTN A = select, long A = return home</p>
+          <div class="button-row">
+            <button id="btnA" type="button">BTN A</button>
+            <button id="btnB" type="button">BTN B</button>
+          </div>
+        </div>
+
+        <div class="badge-row">
+          <span class="badge">Mood: <b id="moodBadge">CALM</b></span>
+          <span class="badge">Stage: <b id="stageBadge">BABY</b></span>
+          <span class="badge">Activity: <b id="activityBadge">IDLE</b></span>
+          <span class="badge">Age: <b id="ageBadge">0d 0h 0m</b></span>
+        </div>
+
+        <label>Pet name
+          <input id="petName" type="text" value="Sablina" maxlength="18" />
+        </label>
+
+        <div class="group">
+          <h3>Core Stats</h3>
+          <label>Hunger: <span id="hunVal">72</span>%
+            <input id="hun" type="range" min="0" max="100" value="72" />
+          </label>
+          <label>Happiness: <span id="fatVal">65</span>%
+            <input id="fat" type="range" min="0" max="100" value="65" />
+          </label>
+          <label>Health: <span id="cleVal">80</span>%
+            <input id="cle" type="range" min="0" max="100" value="80" />
+          </label>
+          <label>Coins: <span id="expVal">42</span>
+            <input id="exp" type="range" min="0" max="999" value="42" />
+          </label>
+        </div>
+
+        <div class="group">
+          <h3>Connection Toggles</h3>
+          <div class="toggles">
+            <label><input id="wifi" type="checkbox" checked /> WiFi</label>
+            <label><input id="ble" type="checkbox" checked /> BLE</label>
+            <label><input id="llm" type="checkbox" checked /> LLM</label>
+            <label><input id="darkMode" type="checkbox" /> Dark mode</label>
+            <label><input id="realWifi" type="checkbox" /> Real WiFi</label>
+            <label><input id="charging" type="checkbox" /> Charging</label>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Main Icon Actions (Original)</h3>
+          <div class="button-row">
+            <button data-cmd="screen:pet_status">status</button>
+            <button data-cmd="feed">feed</button>
+            <button data-cmd="sleep">sleep</button>
+            <button data-cmd="clean">shower</button>
+            <button data-cmd="screen:shop">shop</button>
+            <button data-cmd="screen:achievements">achieve</button>
+            <button data-cmd="screen:tools">tools</button>
+            <button data-cmd="screen:stats">stats</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Extra Activities</h3>
+          <div class="button-row">
+            <button data-cmd="play">play</button>
+            <button data-cmd="pet">pet</button>
+            <button data-cmd="shake">shake</button>
+            <button data-cmd="hunt">hunt</button>
+            <button data-cmd="discover">discover</button>
+            <button data-cmd="rest">rest</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>🎞 Animation Controls</h3>
+          <p class="hint">Override scene + character sprite in real-time. Auto = engine-driven.</p>
+          <div class="grid2" style="margin-bottom:8px">
+            <label>Force Scene
+              <select id="forceScene">
+                <option value="">Auto</option>
+                <option value="home">home (idle)</option>
+                <option value="eat">eat</option>
+                <option value="clean">clean</option>
+                <option value="play">play</option>
+                <option value="sleep">sleep</option>
+                <option value="rest">rest</option>
+                <option value="shake">shake</option>
+                <option value="pet">pet</option>
+                <option value="hunt">hunt</option>
+                <option value="discover">discover</option>
+                <option value="walk">walk</option>
+                <option value="color">color</option>
+                <option value="garden">garden</option>
+                <option value="baby">baby</option>
+                <option value="box">box</option>
+              </select>
+            </label>
+            <label>Character Sprite
+              <select id="charSprite">
+                <option value="">Auto (mood-based)</option>
+                <option value="sablinagif">sablinagif (default)</option>
+                <option value="sablinasleep">sablinasleep</option>
+                <option value="gamewalk">gamewalk</option>
+                <option value="freg">freg</option>
+                <option value="baby">baby</option>
+                <option value="salida">salida</option>
+              </select>
+            </label>
+          </div>
+          <div class="grid2" style="margin-bottom:8px">
+            <label>Mood → Sprite overrides (JSON)
+              <input id="moodSpriteJson" type="text" placeholder='{"EXCITED":"gamewalk","SICK":"sablinasleep"}' style="font-size:.72rem" />
+            </label>
+            <label>Activity → Sprite overrides (JSON)
+              <input id="actSpriteJson" type="text" placeholder='{"HUNT":"gamewalk","REST":"sablinasleep"}' style="font-size:.72rem" />
+            </label>
+          </div>
+          <p id="animStatus" class="hint" style="color:#7dd3fc;font-family:monospace;font-size:.75rem">
+            scene: home | char: sablinagif | mood: CALM | activity: IDLE
+          </p>
+        </div>
+
+        <div class="group">
+          <h3>Screens</h3>
+          <div class="button-row">
+            <button data-cmd="screen:home">home</button>
+            <button data-cmd="screen:pet_status">☠ soul card</button>
+            <button data-cmd="screen:shop">shop</button>
+            <button data-cmd="screen:achievements">achievements</button>
+            <button data-cmd="screen:tools">tools</button>
+            <button data-cmd="screen:stats">stats</button>
+            <button data-cmd="screen:environment">environment</button>
+            <button data-cmd="screen:forest">forest</button>
+            <button data-cmd="screen:system">system</button>
+            <button data-cmd="screen:wifi_food" style="background:#1a237e;color:#00e5ff">☠ WiFi Food</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>🍖 Sablina's Food Hunt</h3>
+          <p class="hint">⚠ Authorized testing only. Handshakes &amp; PMKIDs feed Sablina!</p>
+          <div class="button-row">
+            <button data-cmd="food_scan" style="background:#004d40;color:#a7ffeb">🔍 Sniff</button>
+            <button data-cmd="food_probes" style="background:#01579b;color:#b3e5fc">📡 Probes</button>
+            <button data-cmd="food_deauth" style="background:#b71c1c;color:#ffcdd2">☠ Shake</button>
+            <button data-cmd="food_handshake" style="background:#4a148c;color:#e1bee7">🍖 Catch HS</button>
+            <button data-cmd="food_pmkid" style="background:#e65100;color:#ffe0b2">🍬 PMKID</button>
+            <button data-cmd="food_beacon" style="background:#827717;color:#fff9c4">📢 Beacon</button>
+            <button data-cmd="food_stop" style="background:#37474f;color:#cfd8dc">⏹ Stop</button>
+          </div>
+          <div class="button-row" style="margin-top: 4px;">
+            <button data-cmd="food_prev" style="background:#263238;color:#90a4ae">◀ Prev Prey</button>
+            <button data-cmd="food_next" style="background:#263238;color:#90a4ae">Next Prey ▶</button>
+          </div>
+          <div id="foodStatus" class="ble-peer-status" style="background:#0a0e14;color:#00e5ff;border-color:#1a2a3a;">
+            Mode: IDLE | Prey: 0 | 🍖 Eaten: 0
+          </div>
+        </div>
+
+        <div class="group grid2">
+          <h3>WiFi Environment</h3>
+          <label>Networks
+            <input id="netCount" type="number" min="0" max="20" value="4" />
+          </label>
+          <label>Strong
+            <input id="strongCount" type="number" min="0" max="20" value="2" />
+          </label>
+          <label>Hidden
+            <input id="hiddenCount" type="number" min="0" max="20" value="1" />
+          </label>
+          <label>Open
+            <input id="openCount" type="number" min="0" max="20" value="1" />
+          </label>
+          <label>WPA
+            <input id="wpaCount" type="number" min="0" max="20" value="3" />
+          </label>
+          <label>Avg RSSI
+            <input id="avgRssi" type="number" min="-100" max="-30" value="-71" />
+          </label>
+        </div>
+
+        <div class="group grid2">
+          <h3>Traits</h3>
+          <label>Curiosity
+            <input id="curiosity" type="number" min="0" max="100" value="70" />
+          </label>
+          <label>Activity
+            <input id="activityTrait" type="number" min="0" max="100" value="60" />
+          </label>
+          <label>Stress
+            <input id="stress" type="number" min="0" max="100" value="40" />
+          </label>
+        </div>
+
+        <div class="group grid2">
+          <h3>Controls / Settings</h3>
+          <label>Auto Sleep
+            <input id="autoSleep" type="checkbox" checked />
+          </label>
+          <label>Auto Save
+            <select id="autoSaveMs">
+              <option value="15000">15s</option>
+              <option value="30000" selected>30s</option>
+              <option value="60000">60s</option>
+            </select>
+          </label>
+          <label>Sound
+            <input id="soundEnabled" type="checkbox" checked />
+          </label>
+          <label>NeoPixels
+            <input id="neoPixelsEnabled" type="checkbox" checked />
+          </label>
+          <label>TFT Brightness
+            <select id="tftBrightnessIndex">
+              <option value="0">Low</option>
+              <option value="1" selected>Mid</option>
+              <option value="2">High</option>
+            </select>
+          </label>
+          <label>LED Brightness
+            <select id="ledBrightnessIndex">
+              <option value="0">Low</option>
+              <option value="1" selected>Mid</option>
+              <option value="2">High</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="group">
+          <h3>BLE Peer Interaction</h3>
+          <p class="hint">Open 2 tabs, pets interact autonomously via BLE</p>
+          <div id="blePeerStatus" class="ble-peer-status">No peer detected</div>
+          <div id="bleLog" class="ble-log"></div>
+        </div>
+
+        <div class="group">
+          <h3>📱 Telegram Simulator</h3>
+          <p class="hint">Simula los comandos del bot de Telegram (el Telegram real solo funciona en el ESP32 físico)</p>
+          <div class="button-row" style="flex-wrap:wrap;gap:4px;margin-bottom:6px">
+            <button data-cmd="feed"  style="font-size:11px">🍜 Feed</button>
+            <button data-cmd="clean" style="font-size:11px">🛁 Clean</button>
+            <button data-cmd="sleep" style="font-size:11px">🌙 Sleep</button>
+            <button data-cmd="play"  style="font-size:11px">🎮 Play</button>
+            <button data-cmd="pet"   style="font-size:11px">💜 Pet</button>
+            <button data-cmd="heal"  style="font-size:11px">❤ Heal</button>
+          </div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input id="tgCustomMsg" type="text" placeholder="/stats  /shop  /revive" style="flex:1;font-size:11px" />
+            <button id="tgSendBtn" style="font-size:11px">Enviar</button>
+          </div>
+          <div id="tgLog" style="margin-top:6px;max-height:80px;overflow-y:auto;font-size:10px;color:#7af;background:#0a0e1a;padding:4px;border-radius:4px;font-family:monospace"></div>
+        </div>
+
+        <div class="group">
+          <h3>Reset</h3>
+          <div class="button-row">
+            <button data-cmd="reset">reset pet</button>
+            <button data-cmd="fullreset">reset all</button>
+          </div>
+        </div>
+
+        <label>LLM thought
+          <input id="bubble" type="text" value="" maxlength="80" />
+        </label>
+      </section>
+
+      <!-- ── Project Size & Sprite Editor ── -->
+      <section class="editor-panel" id="editorPanel">
+        <h2>Project Editor</h2>
+
+        <div class="group">
+          <h3>Flash Usage (ESP32-S3 16 MB)</h3>
+          <div class="size-bar-wrap">
+            <div class="size-bar" id="sizeBar"></div>
+            <span class="size-label" id="sizeLabel">0 / 16 MB</span>
+          </div>
+          <div id="sizeBreakdown" class="size-breakdown"></div>
+        </div>
+
+        <div class="group">
+          <h3>Scene → Sprite Mapping</h3>
+          <p class="hint">Which sprite plays for each action/scene</p>
+          <div class="grid2" id="sceneMappings"></div>
+        </div>
+
+        <div class="group">
+          <h3>Sprite Gallery (<span id="spriteCount">0</span> sprites)</h3>
+          <p class="hint">Click a sprite to preview its animation</p>
+          <div class="sprite-filter">
+            <input id="spriteFilter" type="text" placeholder="Filter sprites..." />
+          </div>
+          <div class="sprite-gallery" id="spriteGallery"></div>
+        </div>
+
+        <div class="group" id="spritePreview" style="display:none">
+          <h3>Preview: <span id="previewName">-</span></h3>
+          <div class="preview-info" id="previewInfo"></div>
+          <canvas id="previewCanvas" width="256" height="256"></canvas>
+          <div class="preview-controls">
+            <button id="previewPrev" type="button">◀ Prev</button>
+            <span id="previewFrameLabel">Frame 0/0</span>
+            <button id="previewNext" type="button">Next ▶</button>
+          </div>
+          <button id="previewPlay" type="button">▶ Play Animation</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="./sprites.js"></script>
+    <script src="./app.js"></script>
+    <script>
+      // ── Display zoom control ──
+      (function () {
+        const lcd = document.getElementById("lcd");
+        const info = document.getElementById("zoomInfo");
+        const REAL_W = 118; // 320px at ~260 DPI → 96 DPI monitor ≈ 118px (1.47" screen)
+        const REAL_H = 63;
+
+        const scales = {
+          full: { w: null,  label: "Full," },
+          lg:   { w: 640,   label: "Large, 640px (2× native)" },
+          md:   { w: 480,   label: "Medium, 480px" },
+          sm:   { w: 320,   label: "Small, 320px (1:1 native)" },
+          real: { w: REAL_W, label: `Real  (${REAL_W}px)` },
+        };
+
+        document.querySelectorAll(".zoom-btn").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const s = scales[btn.dataset.scale];
+            if (!s) return;
+            const base = "image-rendering:pixelated;border:4px solid #161616;border-radius:8px;background:#000;height:auto";
+            if (s.w) {
+              lcd.style.cssText = `width:${s.w}px;max-width:${s.w}px;${base}`;
+            } else {
+              lcd.style.cssText = `width:100%;max-width:920px;${base}`;
+            }
+            info.textContent = s.label;
+            document.querySelectorAll(".zoom-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+          });
+        });
+      })();
+
+      // ── Animation Controls ──
+      (function () {
+        const forceScene  = document.getElementById("forceScene");
+        const charSprite  = document.getElementById("charSprite");
+        const moodJson    = document.getElementById("moodSpriteJson");
+        const actJson     = document.getElementById("actSpriteJson");
+        const animStatus  = document.getElementById("animStatus");
+
+        forceScene.addEventListener("change", () => {
+          const v = forceScene.value;
+          if (v === "") {
+            window._forceScene = null;
+          } else {
+            window._forceScene = v;
+            // Call setScene if available (app.js exposes it after load)
+            if (typeof setScene === "function") setScene(v === "home" ? "home" : v);
+          }
+        });
+
+        charSprite.addEventListener("change", () => {
+          window._charSpriteOverride = charSprite.value || null;
+        });
+
+        function tryParseJson(str) {
+          try { return str.trim() ? JSON.parse(str) : null; } catch { return null; }
+        }
+        moodJson.addEventListener("change", () => {
+          window._moodSpriteMap = tryParseJson(moodJson.value);
+        });
+        actJson.addEventListener("change", () => {
+          window._activitySpriteMap = tryParseJson(actJson.value);
+        });
+
+        // Live status ticker
+        setInterval(() => {
+          if (!animStatus || typeof state === "undefined") return;
+          const petSpr = typeof getPetSpriteName === "function" ? getPetSpriteName() : "?";
+          animStatus.textContent =
+            `scene: ${state.scene} | char: ${petSpr} | mood: ${state.mood} | activity: ${state.activity} | bubble: "${(state.bubble||"").slice(0,40)}"`;
+        }, 500);
+      })();
+    </script>
+  </body>
+</html>

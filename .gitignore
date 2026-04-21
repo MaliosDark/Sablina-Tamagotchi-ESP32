@@ -1,0 +1,12 @@
+# ── Secrets (never commit) ──────────────────────────────────────────
+SablinaTamagotchi_2.0/secrets.h
+secrets.h
+
+# ── Arduino build artifacts ──────────────────────────────────────────
+build/
+*.elf
+*.bin
+*.map
+
+# ── macOS ────────────────────────────────────────────────────────────
+.DS_Store

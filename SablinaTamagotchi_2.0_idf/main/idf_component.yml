@@ -1,0 +1,4 @@
+dependencies:
+  espressif/esp-dsp: "*"
+  idf:
+    version: ">=4.4.0"
