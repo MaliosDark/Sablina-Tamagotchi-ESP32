@@ -324,25 +324,18 @@
           <div class="grid2" id="sceneMappings"></div>
         </div>
 
-        <div class="group">
-          <h3>Sprite Gallery (<span id="spriteCount">0</span> sprites)</h3>
-          <p class="hint">Click a sprite to preview its animation</p>
-          <div class="sprite-filter">
-            <input id="spriteFilter" type="text" placeholder="Filter sprites..." />
-          </div>
-          <div class="sprite-gallery" id="spriteGallery"></div>
-        </div>
-
-        <div class="group" id="spritePreview" style="display:none">
-          <h3>Preview: <span id="previewName">-</span></h3>
-          <div class="preview-info" id="previewInfo"></div>
+        <!-- sprite gallery removed; elements kept hidden for JS compat -->
+        <div id="spriteGallery" style="display:none"></div>
+        <span id="spriteCount" style="display:none">0</span>
+        <input id="spriteFilter" style="display:none" />
+        <div id="spritePreview" style="display:none">
+          <span id="previewName"></span>
+          <div id="previewInfo"></div>
           <canvas id="previewCanvas" width="256" height="256"></canvas>
-          <div class="preview-controls">
-            <button id="previewPrev" type="button">◀ Prev</button>
-            <span id="previewFrameLabel">Frame 0/0</span>
-            <button id="previewNext" type="button">Next ▶</button>
-          </div>
-          <button id="previewPlay" type="button">▶ Play Animation</button>
+          <span id="previewFrameLabel"></span>
+          <button id="previewPrev" type="button" style="display:none">◀</button>
+          <button id="previewNext" type="button" style="display:none">▶</button>
+          <button id="previewPlay" type="button" style="display:none">▶ Play</button>
         </div>
       </section>
     </main>

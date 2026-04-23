@@ -5,30 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>✨ Sablina Animation Studio</title>
 
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/omggif@1.0.10/omggif.js"></script>
+  <script src="tools/gif.js"></script>
+  <script src="sprites.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:        #050812;
-      --s1:        rgba(10, 15, 35, 0.88);
-      --s2:        rgba(18, 25, 55, 0.75);
-      --border:    rgba(110, 60, 230, 0.22);
-      --border-hi: rgba(150, 90, 255, 0.55);
-      --primary:   #7c3aed;
-      --p-light:   #a855f7;
-      --accent:    #06b6d4;
-      --a-light:   #22d3ee;
-      --text:      #e2e8f0;
-      --muted:     #94a3b8;
-      --success:   #10b981;
-      --warn:      #f59e0b;
-      --err:       #ef4444;
+      --bg:        #0d1117;
+      --s1:        #161b22;
+      --s2:        #21262d;
+      --s3:        #2d333b;
+      --border:    #30363d;
+      --border-hi: #388bfd;
+      --primary:   #58a6ff;
+      --p-light:   #79c0ff;
+      --accent:    #f78166;
+      --a-light:   #ffa198;
+      --secondary: #bc8cff;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --subtle:    #6e7681;
+      --success:   #3fb950;
+      --warn:      #e3b341;
+      --err:       #f85149;
     }
 
     html, body { height: 100%; }
@@ -36,360 +40,372 @@
     body {
       background: var(--bg);
       color: var(--text);
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
       overflow-x: hidden;
+      font-size: 14px;
+      line-height: 1.5;
     }
 
-    #bg-canvas {
-      position: fixed; inset: 0; z-index: 0;
-      pointer-events: none;
-    }
-
-    #root {
-      position: relative; z-index: 1;
-      min-height: 100vh;
-    }
+    #root { min-height: 100vh; }
 
     /* ── App shell ── */
-    .app { max-width: 1120px; margin: 0 auto; padding: 0 16px 80px; }
+    .app { display: flex; flex-direction: column; min-height: 100vh; }
 
-    /* ── Header ── */
-    .app-header {
-      display: flex; align-items: center; gap: 14px;
-      padding: 22px 0 18px;
+    /* ── Titlebar ── */
+    .app-titlebar {
+      display: flex; align-items: center; gap: 0;
+      height: 36px; min-height: 36px;
+      background: var(--s1);
       border-bottom: 1px solid var(--border);
-      margin-bottom: 22px;
+      padding: 0 16px;
+      user-select: none;
+      flex-shrink: 0;
     }
-    .back-btn {
-      display: inline-flex; align-items: center; gap: 6px;
-      text-decoration: none; color: var(--muted);
-      padding: 7px 14px; border: 1px solid var(--border);
-      border-radius: 8px; font-size: .83rem;
-      background: var(--s1); transition: all .2s;
+    .tb-logo {
+      font-size: .8rem; font-weight: 700; color: var(--text);
+      letter-spacing: .3px; white-space: nowrap;
+      display: flex; align-items: center; gap: 7px;
     }
-    .back-btn:hover { color: var(--text); border-color: var(--primary); box-shadow: 0 0 16px rgba(124,58,237,.35); }
-
-    .app-title {
-      font-size: 1.9rem; font-weight: 800; letter-spacing: -.5px;
-      background: linear-gradient(135deg, #a855f7 0%, #22d3ee 50%, #a855f7 100%);
-      background-size: 200%;
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-      animation: gradShift 5s ease infinite;
+    .tb-logo-icon { font-size: 1rem; line-height: 1; }
+    .tb-sep { width: 1px; height: 16px; background: var(--border); margin: 0 12px; flex-shrink: 0; }
+    .tb-breadcrumb {
+      display: flex; align-items: center; gap: 6px;
+      font-size: .78rem; color: var(--muted);
     }
-    @keyframes gradShift {
-      0%,100% { background-position: 0% 50%; }
-      50%      { background-position: 100% 50%; }
+    .tb-breadcrumb a {
+      color: var(--muted); text-decoration: none; transition: color .15s;
+      padding: 3px 6px; border-radius: 4px;
     }
-
-    .subtitle { color: var(--muted); font-size: .85rem; margin-left: auto; }
+    .tb-breadcrumb a:hover { color: var(--text); background: var(--s2); }
+    .tb-breadcrumb .sep { color: var(--subtle); }
+    .tb-breadcrumb .current { color: var(--text); font-weight: 600; }
+    .tb-right {
+      margin-left: auto; display: flex; align-items: center; gap: 8px;
+      font-size: .73rem; color: var(--subtle);
+    }
+    .tb-badge {
+      padding: 2px 8px; border-radius: 10px; font-size: .68rem; font-weight: 600;
+      background: var(--s3); border: 1px solid var(--border); color: var(--muted);
+      font-family: 'Cascadia Code', 'Fira Code', monospace;
+    }
 
     /* ── Tab bar ── */
-    .tabs { display: flex; gap: 6px; margin-bottom: 24px; }
-    .tab-btn {
-      padding: 9px 20px; border-radius: 22px; font-size: .88rem; font-weight: 600; cursor: pointer;
-      border: 1px solid var(--border); background: var(--s1); color: var(--muted);
-      transition: all .2s;
+    .tabs {
+      display: flex; align-items: stretch; gap: 0;
+      background: var(--s1);
+      border-bottom: 1px solid var(--border);
+      padding: 0 16px;
+      flex-shrink: 0;
+      overflow-x: auto;
     }
-    .tab-btn:hover { color: var(--text); border-color: var(--primary); }
+    .tabs::-webkit-scrollbar { height: 0; }
+    .tab-btn {
+      padding: 0 18px; height: 38px; font-size: .82rem; font-weight: 500; cursor: pointer;
+      border: none; border-bottom: 2px solid transparent;
+      background: transparent; color: var(--muted);
+      transition: color .15s, border-color .15s;
+      white-space: nowrap; display: flex; align-items: center; gap: 6px;
+      position: relative; top: 1px;
+    }
+    .tab-btn:hover { color: var(--text); }
     .tab-btn.active {
-      background: linear-gradient(135deg, var(--primary), var(--accent));
-      color: #fff; border-color: transparent;
-      box-shadow: 0 0 20px rgba(124,58,237,.4);
+      color: var(--text); font-weight: 600;
+      border-bottom-color: var(--primary);
     }
 
-    /* ── Glass card ── */
+    /* ── Main content ── */
+    .app-body {
+      flex: 1; display: flex; flex-direction: column; overflow: hidden;
+    }
+    .app-content {
+      flex: 1; overflow-y: auto; padding: 20px 24px 48px;
+    }
+    .app-content::-webkit-scrollbar { width: 8px; }
+    .app-content::-webkit-scrollbar-track { background: var(--bg); }
+    .app-content::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 4px; }
+    .app-content::-webkit-scrollbar-thumb:hover { background: var(--border-hi); }
+
+    /* ── Panel / Card ── */
     .card {
       background: var(--s1);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px;
-      backdrop-filter: blur(12px);
-      transition: border-color .2s, box-shadow .2s;
+      border-radius: 6px;
+      overflow: hidden;
+      padding: 16px;
     }
-    .card:hover { border-color: rgba(110,60,230,.45); box-shadow: 0 4px 30px rgba(80,40,200,.12); }
+    .card + .card { margin-top: 12px; }
 
     .card-title {
-      font-size: .78rem; font-weight: 700; text-transform: uppercase;
-      letter-spacing: 1.2px; color: var(--muted); margin-bottom: 12px;
+      font-size: .7rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--muted);
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border);
+      background: var(--s2);
+      display: flex; align-items: center; gap: 8px;
+      /* extend to card edges */
+      margin: -16px -16px 16px;
     }
 
     /* ── Drop zone ── */
     .drop-zone {
-      border: 2px dashed var(--border-hi);
-      border-radius: 16px; padding: 48px 24px;
+      border: 1px dashed var(--border);
+      border-radius: 6px; padding: 40px 24px;
       text-align: center; cursor: pointer;
-      background: rgba(124,58,237,.04);
-      transition: all .25s;
+      background: var(--s2);
+      transition: all .2s;
     }
     .drop-zone:hover, .drop-zone.drag-over {
-      border-color: var(--accent);
-      background: rgba(6,182,212,.07);
-      box-shadow: 0 0 30px rgba(6,182,212,.15);
+      border-color: var(--primary);
+      background: rgba(88,166,255,.05);
     }
-    .drop-zone .dz-icon { font-size: 3rem; line-height: 1; margin-bottom: 12px; }
-    .drop-zone .dz-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 6px; color: var(--text); }
-    .drop-zone .dz-sub { font-size: .82rem; color: var(--muted); }
+    .drop-zone .dz-icon { font-size: 2.4rem; line-height: 1; margin-bottom: 10px; opacity: .7; }
+    .drop-zone .dz-title { font-size: 1rem; font-weight: 600; margin-bottom: 4px; color: var(--text); }
+    .drop-zone .dz-sub { font-size: .77rem; color: var(--muted); }
     .drop-zone input { display: none; }
 
     /* ── Settings grid ── */
     .settings-grid {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-      gap: 14px;
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
     }
-    .field { display: flex; flex-direction: column; gap: 5px; }
-    .field label { font-size: .75rem; color: var(--muted); font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+    .field { display: flex; flex-direction: column; gap: 4px; }
+    .field label { font-size: .7rem; color: var(--muted); font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
     .field input, .field select {
-      padding: 8px 12px; border-radius: 8px;
+      padding: 6px 10px; border-radius: 4px;
       border: 1px solid var(--border); background: var(--s2);
-      color: var(--text); font-size: .88rem; outline: none; transition: border-color .2s;
+      color: var(--text); font-size: .82rem; outline: none; transition: border-color .15s;
+      font-family: inherit;
     }
-    .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(6,182,212,.15); }
+    .field input:focus, .field select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(88,166,255,.15); }
 
     /* ── Frame strip ── */
     .frame-strip {
-      display: flex; gap: 8px; overflow-x: auto;
-      padding-bottom: 8px; scroll-snap-type: x proximity;
+      display: flex; gap: 6px; overflow-x: auto;
+      padding: 8px 0; scroll-snap-type: x proximity;
+      background: var(--s2); border-radius: 4px;
     }
     .frame-strip::-webkit-scrollbar { height: 4px; }
-    .frame-strip::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+    .frame-strip::-webkit-scrollbar-track { background: var(--s2); }
+    .frame-strip::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 4px; }
 
     .frame-thumb {
-      flex: 0 0 auto; cursor: pointer; border-radius: 8px; overflow: hidden;
-      border: 2px solid var(--border); transition: all .18s; scroll-snap-align: start;
-      position: relative;
+      flex: 0 0 auto; cursor: pointer; border-radius: 4px; overflow: hidden;
+      border: 2px solid transparent; transition: border-color .15s; scroll-snap-align: start;
+      position: relative; margin-left: 8px;
     }
-    .frame-thumb:hover { border-color: var(--accent); box-shadow: 0 0 12px rgba(6,182,212,.3); }
-    .frame-thumb.selected { border-color: var(--p-light); box-shadow: 0 0 14px rgba(168,85,247,.4); }
-    .frame-thumb img { display: block; width: 72px; height: 72px; object-fit: contain; image-rendering: pixelated; }
+    .frame-thumb:last-child { margin-right: 8px; }
+    .frame-thumb:hover { border-color: var(--border-hi); }
+    .frame-thumb.selected { border-color: var(--primary); }
+    .frame-thumb img { display: block; width: 68px; height: 68px; object-fit: contain; image-rendering: pixelated; background: #000; }
     .frame-thumb .frame-num {
       position: absolute; bottom: 0; left: 0; right: 0;
-      background: rgba(5,8,18,.75); font-size: .62rem; color: var(--muted);
-      text-align: center; padding: 2px 0;
+      background: rgba(13,17,23,.85); font-size: .6rem; color: var(--muted);
+      text-align: center; padding: 2px 0; font-family: monospace;
     }
 
     /* ── Preview canvas ── */
     .preview-wrap {
       display: flex; justify-content: center; align-items: center;
-      padding: 16px;
-      background: #000; border-radius: 10px; border: 1px solid var(--border);
-      min-height: 120px;
+      padding: 12px;
+      background: #000; border-radius: 4px; border: 1px solid var(--border);
+      min-height: 100px;
     }
-    .preview-wrap canvas { image-rendering: pixelated; border-radius: 4px; }
+    .preview-wrap canvas { image-rendering: pixelated; }
 
     /* ── Buttons ── */
     .btn {
-      display: inline-flex; align-items: center; gap: 8px;
-      padding: 10px 22px; border-radius: 10px; font-size: .88rem; font-weight: 700;
-      cursor: pointer; border: none; transition: all .2s; white-space: nowrap;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 4px; font-size: .8rem; font-weight: 500;
+      cursor: pointer; border: 1px solid transparent; transition: all .15s; white-space: nowrap;
+      font-family: inherit; line-height: 1.4;
     }
     .btn-primary {
-      background: linear-gradient(135deg, var(--primary), #6d28d9);
-      color: #fff; box-shadow: 0 4px 16px rgba(124,58,237,.35);
+      background: var(--primary); color: #0d1117;
+      border-color: var(--primary); font-weight: 600;
     }
-    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(124,58,237,.5); }
+    .btn-primary:hover { background: var(--p-light); border-color: var(--p-light); }
     .btn-accent {
-      background: linear-gradient(135deg, var(--accent), #0891b2);
-      color: #fff; box-shadow: 0 4px 16px rgba(6,182,212,.3);
+      background: var(--accent); color: #0d1117;
+      border-color: var(--accent); font-weight: 600;
     }
-    .btn-accent:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(6,182,212,.45); }
+    .btn-accent:hover { background: var(--a-light); border-color: var(--a-light); }
+    .btn-success {
+      background: var(--success); color: #0d1117;
+      border-color: var(--success); font-weight: 600;
+    }
     .btn-ghost {
-      background: var(--s2); border: 1px solid var(--border); color: var(--muted);
+      background: transparent; border-color: var(--border); color: var(--muted);
     }
-    .btn-ghost:hover { color: var(--text); border-color: var(--border-hi); }
-    .btn:disabled { opacity: .45; pointer-events: none; }
+    .btn-ghost:hover { color: var(--text); border-color: var(--muted); background: var(--s2); }
+    .btn:disabled { opacity: .4; pointer-events: none; }
 
-    .btn-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 16px 16px; }
 
     /* ── Output ── */
     .output-area {
-      background: #020409; border: 1px solid var(--border);
-      border-radius: 10px; padding: 0; overflow: hidden;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; overflow: hidden;
     }
     .output-header {
       display: flex; align-items: center; gap: 8px;
-      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      padding: 8px 14px; border-bottom: 1px solid var(--border);
       background: var(--s2);
     }
-    .output-header .fn { font-size: .8rem; color: var(--accent); font-family: monospace; }
-    .output-stats { font-size: .75rem; color: var(--muted); margin-left: auto; }
+    .output-header .fn { font-size: .78rem; color: var(--primary); font-family: 'Cascadia Code','Fira Code',monospace; }
+    .output-stats { font-size: .72rem; color: var(--muted); margin-left: auto; font-family: monospace; }
     .output-code {
-      max-height: 280px; overflow-y: auto; padding: 14px;
-      font-family: 'Fira Code', 'Cascadia Code', monospace;
-      font-size: .72rem; line-height: 1.5; color: #c9d1d9; white-space: pre;
+      max-height: 320px; overflow-y: auto; padding: 14px;
+      font-family: 'Cascadia Code','Fira Code',monospace;
+      font-size: .72rem; line-height: 1.6; color: #adbac7; white-space: pre;
     }
-    .output-code::-webkit-scrollbar { width: 4px; }
-    .output-code::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 4px; }
+    .output-code::-webkit-scrollbar { width: 6px; }
+    .output-code::-webkit-scrollbar-track { background: var(--bg); }
+    .output-code::-webkit-scrollbar-thumb { background: var(--s3); border-radius: 3px; }
 
     /* ── Library ── */
     .library-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 12px;
     }
-    .group-card { background: var(--s1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+    .group-card { background: var(--s1); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
     .group-header {
-      padding: 10px 16px;
+      padding: 8px 14px;
       display: flex; align-items: center; gap: 8px;
-      font-weight: 700; font-size: .85rem;
+      font-weight: 600; font-size: .8rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--s2);
     }
-    .group-body { padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+    .group-body { padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 5px; }
     .anim-chip {
-      display: inline-block; padding: 4px 10px;
-      border-radius: 20px; font-size: .73rem; font-family: monospace;
-      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
-      color: var(--muted); transition: all .15s; cursor: default;
+      display: inline-block; padding: 3px 8px;
+      border-radius: 3px; font-size: .7rem; font-family: 'Cascadia Code','Fira Code',monospace;
+      background: var(--s2); border: 1px solid var(--border);
+      color: var(--muted); transition: all .12s; cursor: default;
     }
-    .anim-chip:hover { color: var(--text); border-color: var(--border-hi); }
+    .anim-chip:hover { color: var(--text); border-color: var(--border-hi); background: var(--s3); }
 
-    .filter-input {
-      width: 100%; padding: 10px 16px; border-radius: 10px;
-      border: 1px solid var(--border); background: var(--s2);
-      color: var(--text); font-size: .88rem; outline: none; margin-bottom: 18px;
-      transition: border-color .2s;
+    .filter-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; background: var(--s1); border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
     }
-    .filter-input:focus { border-color: var(--accent); }
-    .filter-input::placeholder { color: var(--muted); }
+    .filter-input {
+      flex: 1; padding: 6px 10px; border-radius: 4px;
+      border: 1px solid var(--border); background: var(--s2);
+      color: var(--text); font-size: .82rem; outline: none;
+      transition: border-color .15s; font-family: inherit;
+    }
+    .filter-input:focus { border-color: var(--primary); }
+    .filter-input::placeholder { color: var(--subtle); }
+    .filter-label { font-size: .75rem; color: var(--muted); white-space: nowrap; }
 
     /* ── Progress ── */
     .spinner {
-      width: 28px; height: 28px; border: 3px solid var(--border);
-      border-top-color: var(--p-light); border-radius: 50%;
-      animation: spin .7s linear infinite; margin: 0 auto;
+      width: 20px; height: 20px; border: 2px solid var(--border);
+      border-top-color: var(--primary); border-radius: 50%;
+      animation: spin .7s linear infinite; display: inline-block;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .progress-bar-wrap { height: 4px; background: var(--s2); border-radius: 4px; overflow: hidden; margin-top: 8px; }
-    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent)); transition: width .2s; }
+    .progress-bar-wrap { height: 3px; background: var(--s3); border-radius: 2px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: var(--primary); transition: width .2s; }
+    .loading-row { display: flex; align-items: center; gap: 10px; padding: 12px 16px; color: var(--muted); font-size: .8rem; }
 
     /* ── Toast ── */
     .toast-wrap {
-      position: fixed; bottom: 28px; right: 28px; z-index: 9999;
-      display: flex; flex-direction: column; gap: 10px;
+      position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+      display: flex; flex-direction: column; gap: 8px;
       pointer-events: none;
     }
     .toast {
-      padding: 12px 20px; border-radius: 10px; font-size: .85rem; font-weight: 600;
-      backdrop-filter: blur(12px); animation: toastIn .25s ease;
-      pointer-events: all;
-      max-width: 340px;
+      padding: 10px 16px; border-radius: 4px; font-size: .8rem; font-weight: 500;
+      animation: toastIn .2s ease; pointer-events: all;
+      max-width: 320px; border-left: 3px solid;
     }
-    .toast.success { background: rgba(16,185,129,.18); border: 1px solid #10b981; color: #6ee7b7; }
-    .toast.error   { background: rgba(239,68,68,.18); border: 1px solid #ef4444; color: #fca5a5; }
-    .toast.info    { background: rgba(124,58,237,.18); border: 1px solid #7c3aed; color: #c4b5fd; }
-    @keyframes toastIn { from { opacity:0; transform: translateY(16px); } to { opacity:1; transform: translateY(0); } }
+    .toast.success { background: #1a2b1f; border-color: var(--success); color: #7ee787; }
+    .toast.error   { background: #2b1a1a; border-color: var(--err); color: #ff7b72; }
+    .toast.info    { background: #1a2138; border-color: var(--primary); color: #79c0ff; }
+    @keyframes toastIn { from { opacity:0; transform: translateX(16px); } to { opacity:1; transform: translateX(0); } }
+
+    /* ── Two-column layout ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+    @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* ── Library image grid ── */
+    .lib-thumb-grid { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px; }
+    .lib-item { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: default; }
+    .lib-canvas-wrap { position: relative; width: 68px; height: 68px; background: #000; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .lib-canvas-wrap canvas { image-rendering: pixelated; width: 100%; height: 100%; }
+    .lib-canvas-wrap .lib-fallback { font-size: .58rem; color: var(--muted); text-align: center; padding: 2px; word-break: break-all; }
+    .lib-name { font-size: .6rem; color: var(--muted); font-family: 'Cascadia Code','Fira Code',monospace; text-align: center; max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* replace overlay */
+    .lib-replace-overlay { position: absolute; inset: 0; background: rgba(13,17,23,.78); display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity .15s; border-radius: 5px; }
+    .lib-item:hover .lib-replace-overlay { opacity: 1; }
+    .lib-replace-btn { background: var(--primary); border: none; border-radius: 5px; color: #0d1117; font-size: .6rem; font-weight: 700; padding: 4px 7px; cursor: pointer; white-space: nowrap; }
+    .lib-replace-btn:hover { background: #79c0ff; }
+    /* modified dot */
+    .lib-modified-dot { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--success); border: 1px solid #0d1117; pointer-events: none; }
+    /* export button in filter bar */
+    .lib-export-btn { padding: 5px 12px; font-size: .75rem; white-space: nowrap; margin-left: auto; }
+    .lib-export-btn.has-changes { background: var(--primary2); border-color: var(--primary); color: #fff; }
+    /* add-new panel */
+    .lib-add-btn { padding: 5px 12px; font-size: .75rem; white-space: nowrap; background: rgba(63,185,80,.1); border-color: rgba(63,185,80,.35); color: var(--success); }
+    .lib-add-btn:hover { background: rgba(63,185,80,.2); border-color: var(--success); color: var(--success); }
+    .lib-add-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 10px 12px; background: rgba(63,185,80,.05); border: 1px solid rgba(63,185,80,.25); border-radius: 8px; margin-bottom: 8px; }
+    .lib-add-panel .add-label { font-size: .72rem; font-weight: 600; color: var(--success); white-space: nowrap; }
+    .lib-add-panel input[type=text] { width: 160px; font-size: .78rem; padding: 4px 8px; }
+    .lib-add-panel input[type=number] { width: 64px; font-size: .78rem; padding: 4px 6px; text-align: center; }
+    .lib-add-panel .add-sep { color: var(--muted); font-size: .8rem; }
+    .lib-add-panel .add-pick-btn { background: var(--success); border-color: var(--success); color: #0d1117; font-size: .75rem; padding: 4px 10px; }
+    .lib-add-panel .add-pick-btn:hover { background: #56d364; }
+    .lib-add-panel .add-cancel-btn { background: transparent; border-color: var(--border2); color: var(--muted); font-size: .75rem; padding: 4px 8px; }
+    /* new-dot for added sprites */
+    .lib-new-dot { position: absolute; top: 3px; left: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--success); border: 1px solid #0d1117; pointer-events: none; }
 
     /* ── Misc ── */
-    .section { margin-bottom: 20px; }
-    .gap { display: flex; flex-direction: column; gap: 16px; }
-    .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
-    .tag { display: inline-block; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; padding: 3px 8px; border-radius: 5px; }
-    .dim-badge { color: var(--accent); font-family: monospace; font-size: .82rem; }
+    .section { margin-bottom: 16px; }
+    .gap { display: flex; flex-direction: column; gap: 12px; }
+    .row { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+    .tag { display: inline-block; font-size: .67rem; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; padding: 2px 6px; border-radius: 3px; }
+    .dim-badge { color: var(--primary); font-family: 'Cascadia Code','Fira Code',monospace; font-size: .78rem; }
+
+    /* ── Status bar ── */
+    .status-bar {
+      height: 22px; min-height: 22px; background: var(--primary); color: #0d1117;
+      display: flex; align-items: center; gap: 16px;
+      padding: 0 12px; font-size: .68rem; font-weight: 600;
+      flex-shrink: 0;
+    }
+    .status-bar a { color: #0d1117; text-decoration: none; }
+    .status-bar a:hover { text-decoration: underline; }
+    .status-bar .sb-sep { opacity: .4; }
   </style>
 </head>
 <body>
-<canvas id="bg-canvas"></canvas>
 <div id="root"></div>
-
-<!-- ═══════════════════════════════════ THREE.JS ═══════════════════════════════════ -->
-<script>
-(function () {
-  const canvas = document.getElementById('bg-canvas');
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x050812);
-
-  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.z = 90;
-
-  // ── Particles ──
-  const N = 450;
-  const pos = [], col = [];
-  const c = new THREE.Color();
-  for (let i = 0; i < N; i++) {
-    pos.push((Math.random() - .5) * 220, (Math.random() - .5) * 130, (Math.random() - .5) * 70);
-    const isPurple = Math.random() < .55;
-    c.setHSL(isPurple ? .72 + Math.random() * .1 : .53 + Math.random() * .06, .85, .55 + Math.random() * .3);
-    col.push(c.r, c.g, c.b);
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  const ptsMat = new THREE.PointsMaterial({ size: .9, vertexColors: true, transparent: true, opacity: .75 });
-  const pts = new THREE.Points(geo, ptsMat);
-  scene.add(pts);
-
-  // ── Connecting lines (static, computed once) ──
-  const lPos = [], lCol = [];
-  const MAXD = 28;
-  for (let i = 0; i < N; i++) {
-    for (let j = i + 1; j < N; j++) {
-      const dx = pos[i*3]-pos[j*3], dy = pos[i*3+1]-pos[j*3+1], dz = pos[i*3+2]-pos[j*3+2];
-      const d = Math.sqrt(dx*dx+dy*dy+dz*dz);
-      if (d < MAXD) {
-        const a = (1 - d / MAXD) * .4;
-        lPos.push(pos[i*3],pos[i*3+1],pos[i*3+2], pos[j*3],pos[j*3+1],pos[j*3+2]);
-        lCol.push(.48,.22,.9,a,  .48,.22,.9,a);
-      }
-    }
-  }
-  if (lPos.length) {
-    const lg = new THREE.BufferGeometry();
-    lg.setAttribute('position', new THREE.Float32BufferAttribute(lPos, 3));
-    const lm = new THREE.LineBasicMaterial({ vertexColors: false, color: 0x6622cc, transparent: true, opacity: .18 });
-    scene.add(new THREE.LineSegments(lg, lm));
-  }
-
-  // ── Mouse parallax ──
-  let mx = 0, my = 0;
-  window.addEventListener('mousemove', e => {
-    mx = (e.clientX / window.innerWidth - .5) * 2;
-    my = (e.clientY / window.innerHeight - .5) * 2;
-  });
-
-  // ── Animate ──
-  let t = 0;
-  (function loop() {
-    requestAnimationFrame(loop);
-    t += .0008;
-    pts.rotation.y = t + mx * .04;
-    pts.rotation.x = t * .4 + my * .03;
-    ptsMat.opacity = .6 + Math.sin(t * 3) * .1;
-    renderer.render(scene, camera);
-  })();
-
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-})();
-</script>
 
 <!-- ═══════════════════════════════════ REACT ═══════════════════════════════════ -->
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
 
-// ── Animation groups ──
+// ── Animation groups (MikuruTamagotchi_1.0) ──
 const GROUPS = [
-  { name: '🐾 Character', color: '#a855f7', bg: 'rgba(168,85,247,.12)',
+  { name: '🐾 Character', color: '#a855f7',
     items: ['sablinagif','sablinasleep','gamewalk','freg'] },
-  { name: '🍱 Eating', color: '#f97316', bg: 'rgba(249,115,22,.12)',
+  { name: '🍱 Eating', color: '#f97316',
     items: ['eatgif','sablinaeat','sablinaeat2','sablinaeat3','sablinaeat4','sablinaeat5','sablinaeat6','sablinaeat7','sablinaeat8','sablinaeat9','sablinaeat10','sablinaeat11','sushi'] },
-  { name: '🏠 Rooms', color: '#06b6d4', bg: 'rgba(6,182,212,.12)',
+  { name: '🏠 Rooms', color: '#06b6d4',
     items: ['roomblack','roomblue','roomgray','roomgreen','roomred','roomwhite'] },
-  { name: '🌿 Nature', color: '#22c55e', bg: 'rgba(34,197,94,.12)',
+  { name: '🌿 Nature', color: '#22c55e',
     items: ['forest1','forest2','gardengif'] },
-  { name: '⚡ Activities', color: '#3b82f6', bg: 'rgba(59,130,246,.12)',
+  { name: '⚡ Activities', color: '#3b82f6',
     items: ['cleangif','colorgif','gamegif','sleepgif'] },
-  { name: '📦 Items & Props', color: '#f59e0b', bg: 'rgba(245,158,11,.12)',
-    items: ['baby','box','computer','door','salida','shop','watercooler','weber','pancho','pest','warn'] },
-  { name: '🖼 Pictures', color: '#ec4899', bg: 'rgba(236,72,153,.12)',
+  { name: '📦 Items & Props', color: '#e3b341',
+    items: ['baby','box','computer','door','salida','shop','watercooler','pancho','pest','warn'] },
+  { name: '🖼 Pictures', color: '#ec4899',
     items: ['picture0','picture1'] },
-  { name: '🎞 Frames', color: '#8b5cf6', bg: 'rgba(139,92,246,.12)',
+  { name: '🎞 Frames', color: '#8b5cf6',
     items: Array.from({length:22},(_,i)=>`f${String(i+1).padStart(2,'0')}`) },
 ];
 
@@ -409,7 +425,7 @@ function canvasToRgb565(canvas, tw, th) {
 
 function buildHeader(rgb565Frames, varName, tw, th) {
   const fs = tw * th;
-  let h = `// Generated by Sablina Animation Studio\n`;
+  let h = `// Generated by Mikuru Animation Studio\n`;
   h += `// ${rgb565Frames.length} frame(s), ${tw}x${th} pixels (${fs} uint16 per frame)\n`;
   h += `#pragma once\n\n`;
   h += `const unsigned short PROGMEM ${varName}[][${fs}] = {\n`;
@@ -709,101 +725,369 @@ function ConvertTab({ addToast }) {
   const W = rawFrames[0]?.canvas.width ?? '—';
   const H = rawFrames[0]?.canvas.height ?? '—';
 
-  return (
-    <div className="gap">
-      <div className="card">
-        <div className="card-title">1 · Drop or Select File</div>
-        <DropZone onFile={handleFile} disabled={processing} />
-        {processing && (
-          <div style={{marginTop:16,textAlign:'center'}}>
-            <div className="spinner"/>
-            <div className="progress-bar-wrap" style={{marginTop:10,maxWidth:300,margin:'10px auto 0'}}>
-              <div className="progress-bar-fill" style={{width:`${Math.round(progress*100)||10}%`}}/>
+  const dropCard = (
+    <div className="card">
+      <div className="card-title">1 · Drop or Select File</div>
+      <DropZone onFile={handleFile} disabled={processing} />
+      {processing && (
+        <div className="loading-row" style={{marginTop:12}}>
+          <div className="spinner"/>
+          <div style={{flex:1}}>
+            <div style={{marginBottom:4}}>Processing…</div>
+            <div className="progress-bar-wrap">
+              <div className="progress-bar-fill" style={{width:`${Math.round(progress*100)||8}%`}}/>
             </div>
-            <div style={{fontSize:'.78rem',color:'var(--muted)',marginTop:6}}>Processing…</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="two-col">
+      {/* Left column: drop zone + frame preview */}
+      <div className="gap">
+        {dropCard}
+        {hasFrames && (
+          <div className="card">
+            <div className="card-title">2 · Frame Preview
+              <span className="dim-badge" style={{marginLeft:12}}>{rawFrames.length} frames · {W}×{H}px source</span>
+            </div>
+            <div className="row" style={{gap:20}}>
+              <div style={{flex:1,minWidth:200}}>
+                <FrameStrip frames={thumbFrames} selected={selected} onSelect={setSelected} />
+              </div>
+              <div>
+                <div style={{fontSize:'.72rem',color:'var(--muted)',marginBottom:6,textAlign:'center'}}>
+                  Preview (scaled {settings.width}×{settings.height})
+                </div>
+                <div className="preview-wrap" style={{minHeight:80}}>
+                  <canvas ref={previewRef} style={{maxWidth:160,maxHeight:160}} />
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>
-
-      {hasFrames && (
-        <div className="card">
-          <div className="card-title">2 · Frame Preview
-            <span className="dim-badge" style={{marginLeft:12}}>{rawFrames.length} frames · {W}×{H}px source</span>
-          </div>
-          <div className="row" style={{gap:20}}>
-            <div style={{flex:1,minWidth:200}}>
-              <FrameStrip frames={thumbFrames} selected={selected} onSelect={setSelected} />
-            </div>
-            <div>
-              <div style={{fontSize:'.72rem',color:'var(--muted)',marginBottom:6,textAlign:'center'}}>
-                Preview (scaled {settings.width}×{settings.height})
-              </div>
-              <div className="preview-wrap" style={{minHeight:80}}>
-                <canvas ref={previewRef} style={{maxWidth:160,maxHeight:160}} />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {hasFrames && (
-        <div className="card">
+      {/* Right column: settings + output */}
+      <div className="gap">
+        <div className="card" style={!hasFrames ? {opacity:.4,pointerEvents:'none'} : {}}>
           <div className="card-title">3 · Export Settings</div>
           <SettingsPanel s={settings} onChange={setSettings} />
-          <div style={{marginTop:16}} className="btn-row">
-            <button className="btn btn-primary" onClick={doConvert} disabled={processing}>
+          <div style={{marginTop:12}} className="btn-row">
+            <button className="btn btn-primary" onClick={doConvert} disabled={processing||!hasFrames}>
               ⚡ Convert to .h
             </button>
             <span style={{color:'var(--muted)',fontSize:'.78rem'}}>
-              Output: {settings.width}×{settings.height} × {rawFrames.length} frames = {(settings.width*settings.height*rawFrames.length*2/1024).toFixed(1)} KB
+              {hasFrames ? `Output: ${settings.width}×${settings.height} × ${rawFrames.length} frames = ${(settings.width*settings.height*rawFrames.length*2/1024).toFixed(1)} KB` : 'Drop a file to enable'}
             </span>
           </div>
         </div>
-      )}
+        {output && (
+          <div className="card">
+            <div className="card-title">4 · Generated Header</div>
+            <OutputPanel
+              code={output}
+              filename={fileName}
+              onDownload={download}
+              onCopy={copyCode}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-      {output && (
-        <div className="card">
-          <div className="card-title">4 · Generated Header</div>
-          <OutputPanel
-            code={output}
-            filename={fileName}
-            onDownload={download}
-            onCopy={copyCode}
-          />
+// ── Sprite-replace helpers ──
+function px2rgb565(r, g, b) { return ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3); }
+
+function canvasToRGB565(cvs) {
+  const ctx = cvs.getContext('2d');
+  const { data } = ctx.getImageData(0, 0, cvs.width, cvs.height);
+  const out = [];
+  for (let i = 0; i < cvs.width * cvs.height; i++)
+    out.push(px2rgb565(data[i*4], data[i*4+1], data[i*4+2]));
+  return out;
+}
+
+function scaleImageToCanvas(src, w, h) {
+  const cvs = document.createElement('canvas');
+  cvs.width = w; cvs.height = h;
+  cvs.getContext('2d').drawImage(src, 0, 0, w, h);
+  return cvs;
+}
+
+async function fileToSprite(file, targetW, targetH) {
+  if (file.type === 'image/gif' && window.GifReader) {
+    // Animated GIF → multi-frame sprite
+    const buf = await file.arrayBuffer();
+    const gr = new window.GifReader(new Uint8Array(buf));
+    const gw = gr.width, gh = gr.height;
+    const accum = new Uint8ClampedArray(gw * gh * 4);
+    const frames = [];
+    for (let f = 0; f < gr.numFrames(); f++) {
+      const fi = gr.frameInfo(f);
+      gr.decodeAndBlitFrameRGBA(f, accum);
+      const raw = document.createElement('canvas');
+      raw.width = gw; raw.height = gh;
+      raw.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(accum), gw, gh), 0, 0);
+      const scaled = scaleImageToCanvas(raw, targetW, targetH);
+      frames.push(canvasToRGB565(scaled));
+    }
+    return { w: targetW, h: targetH, framePixels: targetW * targetH, frameCount: frames.length, frames };
+  } else {
+    // Static image (PNG/JPG/WebP/BMP)
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    URL.revokeObjectURL(url);
+    const cvs = scaleImageToCanvas(img, targetW, targetH);
+    return { w: targetW, h: targetH, data: canvasToRGB565(cvs) };
+  }
+}
+
+function serializeSpritesJs() {
+  const sp = window.ORIGINAL_SPRITES;
+  const lines = ['window.ORIGINAL_SPRITES = {'];
+  const keys = Object.keys(sp);
+  keys.forEach((k, ki) => {
+    const s = sp[k];
+    const comma = ki < keys.length - 1 ? ',' : '';
+    if (s.frames) {
+      const frameLines = s.frames.map((fr, fi) =>
+        '    [' + fr.join(',') + ']' + (fi < s.frames.length - 1 ? ',' : ''));
+      lines.push(`  "${k}":{"w":${s.w},"h":${s.h},"framePixels":${s.framePixels},"frameCount":${s.frameCount},"frames":[`);
+      frameLines.forEach(l => lines.push(l));
+      lines.push('  ]}' + comma);
+    } else {
+      lines.push(`  "${k}":{"w":${s.w},"h":${s.h},"data":[${s.data.join(',')}]}${comma}`);
+    }
+  });
+  lines.push('};');
+  return lines.join('\n');
+}
+
+// ── SpriteThumb — renders first frame of a sprite from window.ORIGINAL_SPRITES ──
+function SpriteThumb({ name, color, onReplace, modified, isNew }) {
+  const canvasRef = useRef();
+  const [ver, setVer] = useState(0); // bump to force repaint after replace
+  useEffect(() => {
+    const sp = window.ORIGINAL_SPRITES && window.ORIGINAL_SPRITES[name];
+    if (!sp || !canvasRef.current) return;
+    const { w, h } = sp;
+    const firstFrame = sp.frames ? sp.frames[0] : sp.data;
+    if (!firstFrame) return;
+    const canvas = canvasRef.current;
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.createImageData(w, h);
+    const count = Math.min(firstFrame.length, w * h);
+    for (let i = 0; i < count; i++) {
+      const v = firstFrame[i];
+      imgData.data[i*4]   = ((v >> 11) & 0x1F) << 3;
+      imgData.data[i*4+1] = ((v >> 5)  & 0x3F) << 2;
+      imgData.data[i*4+2] = (v & 0x1F) << 3;
+      imgData.data[i*4+3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }, [name, ver]);
+
+  const sp = window.ORIGINAL_SPRITES && window.ORIGINAL_SPRITES[name];
+  const info = sp ? (sp.frames ? `${sp.frameCount}fr · ${sp.w}×${sp.h}` : `${sp.w}×${sp.h}`) : '—';
+
+  function triggerReplace(e) {
+    e.stopPropagation();
+    if (onReplace) onReplace(name, () => setVer(v => v + 1));
+  }
+
+  return (
+    <div className="lib-item" title={`${name} · ${info}`}>
+      <div className="lib-canvas-wrap" style={sp ? {} : {borderColor: color+'66'}}>
+        {sp ? <canvas ref={canvasRef} /> : <span className="lib-fallback">{name}</span>}
+        <div className="lib-replace-overlay">
+          <button className="lib-replace-btn" onClick={triggerReplace} title={`Replace ${name}`}>↑ Replace</button>
         </div>
-      )}
+        {modified && <div className="lib-modified-dot" title="Modified — export sprites.js to save"/>}
+        {isNew && !modified && <div className="lib-new-dot" title="New sprite — export sprites.js to save"/>}
+      </div>
+      <div className="lib-name" style={{color: color+'cc'}}>{name}</div>
     </div>
   );
 }
 
 // ── Library Tab ──
-function LibraryTab() {
+function LibraryTab({ addToast }) {
   const [filter, setFilter] = useState('');
+  const [modified, setModified] = useState(new Set());
+  const [replacing, setReplacing] = useState(null); // {name, repaintCb}
+  const [exporting, setExporting] = useState(false);
+  const [customItems, setCustomItems] = useState([]); // names added this session
+  const [addMode, setAddMode] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newW, setNewW] = useState(100);
+  const [newH, setNewH] = useState(100);
+  const fileInputRef = useRef();
+  const addFileInputRef = useRef();
   const q = filter.toLowerCase();
   const filtered = GROUPS.map(g => ({
     ...g, items: g.items.filter(n => n.includes(q))
   })).filter(g => g.items.length > 0 || g.name.toLowerCase().includes(q));
 
+  function handleReplaceClick(name, repaintCb) {
+    setReplacing({ name, repaintCb });
+    fileInputRef.current.value = '';
+    fileInputRef.current.click();
+  }
+
+  async function handleFileChosen(e) {
+    const file = e.target.files[0];
+    if (!file || !replacing) return;
+    const { name, repaintCb } = replacing;
+    const sp = window.ORIGINAL_SPRITES && window.ORIGINAL_SPRITES[name];
+    const tw = sp ? sp.w : 100;
+    const th = sp ? sp.h : 100;
+    try {
+      const newSprite = await fileToSprite(file, tw, th);
+      window.ORIGINAL_SPRITES[name] = newSprite;
+      setModified(prev => new Set([...prev, name]));
+      repaintCb();
+      const fc = newSprite.frames ? `${newSprite.frameCount} frames` : 'static';
+      addToast(`✅ ${name} replaced (${tw}×${th}, ${fc})`, 'ok');
+    } catch(err) {
+      addToast(`❌ Replace failed: ${err.message}`, 'err');
+    }
+    setReplacing(null);
+  }
+
+  function triggerAddFile() {
+    const name = newName.trim();
+    if (!name) { addToast('Enter a sprite name first.', 'err'); return; }
+    if (/\s/.test(name)) { addToast('Sprite name cannot have spaces.', 'err'); return; }
+    if (window.ORIGINAL_SPRITES && window.ORIGINAL_SPRITES[name]) {
+      addToast(`"${name}" already exists — use ↑ Replace instead.`, 'err'); return;
+    }
+    addFileInputRef.current.value = '';
+    addFileInputRef.current.click();
+  }
+
+  async function handleAddFileChosen(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const name = newName.trim();
+    const w = Math.max(1, parseInt(newW) || 100);
+    const h = Math.max(1, parseInt(newH) || 100);
+    try {
+      const sprite = await fileToSprite(file, w, h);
+      if (!window.ORIGINAL_SPRITES) window.ORIGINAL_SPRITES = {};
+      window.ORIGINAL_SPRITES[name] = sprite;
+      setCustomItems(prev => [...prev, name]);
+      setModified(prev => new Set([...prev, name]));
+      const fc = sprite.frames ? `${sprite.frameCount} frames` : 'static';
+      addToast(`✅ "${name}" added (${w}×${h}, ${fc})`, 'ok');
+      setNewName('');
+      setAddMode(false);
+    } catch(err) {
+      addToast(`❌ Add failed: ${err.message}`, 'err');
+    }
+  }
+
+  async function doExport() {
+    if (modified.size === 0) { addToast('No sprites have been modified yet.', 'info'); return; }
+    setExporting(true);
+    try {
+      const js = serializeSpritesJs();
+      const blob = new Blob([js], { type: 'text/javascript' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'sprites.js';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      addToast(`⬇ sprites.js exported (${modified.size} sprite${modified.size>1?'s':''} modified)`, 'ok');
+    } catch(err) {
+      addToast(`❌ Export failed: ${err.message}`, 'err');
+    }
+    setExporting(false);
+  }
+
   return (
     <div>
-      <input className="filter-input" placeholder="🔍  Filter animations…" value={filter} onChange={e=>setFilter(e.target.value)} />
+      <input ref={fileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleFileChosen} />
+      <input ref={addFileInputRef} type="file" accept="image/*" style={{display:'none'}} onChange={handleAddFileChosen} />
+      <div className="filter-bar">
+        <span className="filter-label">Filter:</span>
+        <input className="filter-input" placeholder="Search animation names…" value={filter} onChange={e=>setFilter(e.target.value)} />
+        <span style={{fontSize:'.72rem',color:'var(--muted)',whiteSpace:'nowrap'}}>{filtered.reduce((a,g)=>a+g.items.length,0) + customItems.filter(n=>!n||n.includes(q)).length} results</span>
+        <button className="btn lib-add-btn" onClick={()=>setAddMode(v=>!v)} title="Add a brand-new sprite to the library">
+          {addMode ? '✕ Cancel' : '+ New Sprite'}
+        </button>
+        <button
+          className={`btn btn-primary lib-export-btn${modified.size>0?' has-changes':''}`}
+          onClick={doExport}
+          disabled={exporting}
+          title={modified.size>0 ? `${modified.size} sprite(s) modified — download new sprites.js` : 'No changes yet'}
+        >
+          {exporting ? '⏳' : '⬇'} Export sprites.js{modified.size > 0 ? ` (${modified.size})` : ''}
+        </button>
+      </div>
+      {addMode && (
+        <div className="lib-add-panel">
+          <span className="add-label">✨ New sprite:</span>
+          <input
+            type="text" placeholder="sprite_name" value={newName}
+            onChange={e=>setNewName(e.target.value.replace(/\s/g,'_'))}
+            onKeyDown={e=>{ if(e.key==='Enter') triggerAddFile(); }}
+          />
+          <span className="add-sep">Size:</span>
+          <input type="number" value={newW} min="1" max="320" onChange={e=>setNewW(e.target.value)} title="Width in pixels" />
+          <span className="add-sep">×</span>
+          <input type="number" value={newH} min="1" max="172" onChange={e=>setNewH(e.target.value)} title="Height in pixels" />
+          <span className="add-sep">px</span>
+          <button className="btn add-pick-btn" onClick={triggerAddFile}>Pick File →</button>
+          <button className="btn add-cancel-btn" onClick={()=>setAddMode(false)}>✕</button>
+        </div>
+      )}
+      <div style={{fontSize:'.72rem',color:'var(--muted)',padding:'0 0 8px 2px',lineHeight:1.5}}>
+        Hover any sprite → <b style={{color:'var(--primary)'}}>↑ Replace</b> to swap · <b style={{color:'var(--success)'}}>+ New Sprite</b> to add a brand-new one. Then <b style={{color:'var(--primary)'}}>Export sprites.js</b> and replace <code style={{color:'var(--accent)'}}>simulator/sprites.js</code> on disk.
+      </div>
       <div className="library-grid">
         {filtered.map(g => (
           <div key={g.name} className="group-card">
-            <div className="group-header" style={{background:g.bg,color:g.color}}>
+            <div className="group-header" style={{borderLeft:`3px solid ${g.color}`,color:g.color}}>
               {g.name}
-              <span style={{marginLeft:'auto',fontSize:'.72rem',opacity:.7,fontWeight:400}}>{g.items.length} files</span>
+              <span style={{marginLeft:'auto',fontSize:'.7rem',opacity:.65,fontWeight:400,color:'var(--muted)'}}>{g.items.length} files</span>
             </div>
-            <div className="group-body">
+            <div className="group-body lib-thumb-grid">
               {g.items.map(name => (
-                <span key={name} className="anim-chip"
-                  style={{borderColor:`${g.color}33`,color:q&&name.includes(q)?g.color:'var(--muted)'}}
-                  title={`../SablinaTamagotchi_1.0/${name}.h`}
-                >{name}</span>
+                <SpriteThumb key={name} name={name} color={g.color}
+                  onReplace={handleReplaceClick}
+                  modified={modified.has(name)}
+                />
               ))}
             </div>
           </div>
         ))}
+        {customItems.length > 0 && (
+          <div className="group-card">
+            <div className="group-header" style={{borderLeft:'3px solid var(--success)',color:'var(--success)'}}>
+              ✨ Custom
+              <span style={{marginLeft:'auto',fontSize:'.7rem',opacity:.65,fontWeight:400,color:'var(--muted)'}}>{customItems.length} added</span>
+            </div>
+            <div className="group-body lib-thumb-grid">
+              {customItems.map(name => (
+                <SpriteThumb key={name} name={name} color="var(--success)"
+                  onReplace={handleReplaceClick}
+                  modified={modified.has(name)}
+                  isNew={true}
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -847,6 +1131,228 @@ function AboutTab() {
   );
 }
 
+// ── GIF Maker Tab ──
+function GifMakerTab({ addToast }) {
+  const [img, setImg] = useState(null);
+  const [imgSrc, setImgSrc] = useState(null);
+  const [rows, setRows] = useState(4);
+  const [cols, setCols] = useState(4);
+  const [frameDelay, setFrameDelay] = useState(150);
+  const [offTop, setOffTop]     = useState(0);
+  const [offBottom, setOffBottom] = useState(0);
+  const [offLeft, setOffLeft]   = useState(0);
+  const [offRight, setOffRight] = useState(0);
+  const [frames, setFrames] = useState([]);
+  const [gifUrl, setGifUrl]   = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [progress, setProgress]   = useState(0);
+  const [status, setStatus]       = useState('');
+  const [drag, setDrag]           = useState(false);
+  const overlayRef = useRef();
+  const tempRef    = useRef();
+  const inputRef   = useRef();
+  const imgRef     = useRef();
+
+  function loadFile(file) {
+    if (!file || !file.type.startsWith('image/')) { addToast('Image files only (PNG/JPG/BMP)', 'err'); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      const image = new Image();
+      image.onload = () => { setImg(image); setImgSrc(e.target.result); setGifUrl(null); setFrames([]); setStatus(''); };
+      image.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Redraw grid overlay whenever params change
+  useEffect(() => {
+    if (!img || !overlayRef.current) return;
+    const cvs = overlayRef.current;
+    cvs.width = img.width; cvs.height = img.height;
+    const ctx = cvs.getContext('2d');
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    const effW = img.width  - offLeft - offRight;
+    const effH = img.height - offTop  - offBottom;
+    const fw = Math.floor(effW / cols);
+    const fh = Math.floor(effH / rows);
+    ctx.strokeStyle = '#ff4444';
+    ctx.lineWidth = Math.max(1, img.width / 300);
+    ctx.strokeRect(offLeft, offTop, effW, effH);
+    for (let c = 1; c < cols; c++) { const x = offLeft + c*fw; ctx.beginPath(); ctx.moveTo(x, offTop); ctx.lineTo(x, img.height - offBottom); ctx.stroke(); }
+    for (let r = 1; r < rows; r++) { const y = offTop + r*fh;  ctx.beginPath(); ctx.moveTo(offLeft, y); ctx.lineTo(img.width - offRight, y); ctx.stroke(); }
+  }, [img, rows, cols, offTop, offBottom, offLeft, offRight]);
+
+  function buildFrameDataURLs() {
+    if (!img || !tempRef.current) return { srcs: [], fw: 0, fh: 0 };
+    const effW = img.width  - offLeft - offRight;
+    const effH = img.height - offTop  - offBottom;
+    const fw = Math.floor(effW / cols);
+    const fh = Math.floor(effH / rows);
+    const cvs = tempRef.current; cvs.width = fw; cvs.height = fh;
+    const ctx = cvs.getContext('2d');
+    const srcs = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        ctx.clearRect(0, 0, fw, fh);
+        ctx.drawImage(img, offLeft + c*fw, offTop + r*fh, fw, fh, 0, 0, fw, fh);
+        srcs.push(cvs.toDataURL('image/png'));
+      }
+    }
+    return { srcs, fw, fh };
+  }
+
+  function previewFrames() {
+    const { srcs } = buildFrameDataURLs();
+    setFrames(srcs);
+  }
+
+  function generateGif() {
+    if (!img) return;
+    if (!window.GIF) { addToast('GIF library not loaded — reload the page', 'err'); return; }
+    const { srcs, fw, fh } = buildFrameDataURLs();
+    setFrames(srcs);
+    setGenerating(true); setProgress(0); setGifUrl(null);
+    setStatus('Encoding frames…');
+
+    const gif = new window.GIF({
+      workers: 2, quality: 10,
+      width: fw, height: fh,
+      workerScript: 'tools/gif.worker.js',
+    });
+
+    const effW = img.width  - offLeft - offRight;
+    const effH = img.height - offTop  - offBottom;
+    const frameW = Math.floor(effW / cols);
+    const frameH = Math.floor(effH / rows);
+    const cvs = tempRef.current; cvs.width = frameW; cvs.height = frameH;
+    const ctx = cvs.getContext('2d');
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        ctx.clearRect(0, 0, frameW, frameH);
+        ctx.drawImage(img, offLeft + c*frameW, offTop + r*frameH, frameW, frameH, 0, 0, frameW, frameH);
+        gif.addFrame(ctx, { copy: true, delay: frameDelay });
+      }
+    }
+
+    gif.on('progress', p => { setProgress(Math.round(p*100)); setStatus(`Rendering: ${Math.round(p*100)}%`); });
+    gif.on('finished', blob => {
+      const url = URL.createObjectURL(blob);
+      setGifUrl(url); setGenerating(false); setStatus('');
+      addToast('GIF ready!', 'success');
+    });
+    gif.render();
+  }
+
+  const numFields = [
+    ['Rows',          rows,      setRows,      1, 64],
+    ['Columns',       cols,      setCols,      1, 64],
+    ['Frame delay ms',frameDelay,setFrameDelay,10,2000],
+    ['Offset top',    offTop,    setOffTop,    0, 9999],
+    ['Offset bottom', offBottom, setOffBottom, 0, 9999],
+    ['Offset left',   offLeft,   setOffLeft,   0, 9999],
+    ['Offset right',  offRight,  setOffRight,  0, 9999],
+  ];
+
+  const dropZoneCard = (
+    <div className="card">
+      <div className="card-title">1 · Drop Sprite Sheet</div>
+      <div
+        className={`drop-zone${drag?' drag-over':''}`}
+        style={{marginTop:4}}
+        onDragOver={e=>{e.preventDefault();setDrag(true);}}
+        onDragLeave={()=>setDrag(false)}
+        onDrop={e=>{e.preventDefault();setDrag(false);loadFile(e.dataTransfer.files[0]);}}
+        onClick={()=>inputRef.current.click()}
+      >
+        <div className="dz-icon">🎞</div>
+        <div className="dz-title">{img ? img.width+'×'+img.height+'px loaded' : 'Drop your sprite sheet here'}</div>
+        <div className="dz-sub">{img ? `${rows*cols} frames · click to change` : 'PNG · JPG · BMP · WebP'}</div>
+        <input ref={inputRef} type="file" accept="image/*" style={{display:'none'}} onChange={e=>{loadFile(e.target.files[0]);e.target.value='';}} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:16}}>
+      <div className="two-col">
+        {/* Left column: drop zone + settings + spritesheet preview */}
+        <div className="gap">
+          {dropZoneCard}
+          {img && (
+            <div className="card">
+              <div className="card-title">Settings — {img.width}×{img.height}px · {rows*cols} frames</div>
+              <div className="settings-grid">
+                {numFields.map(([label, val, setter, min, max]) => (
+                  <div key={label} className="field">
+                    <label>{label}</label>
+                    <input type="number" min={min} max={max} value={val} onChange={e=>setter(+e.target.value||min)} />
+                  </div>
+                ))}
+              </div>
+              <div style={{display:'flex',gap:8,marginTop:12,flexWrap:'wrap'}}>
+                <button className="btn btn-ghost" onClick={previewFrames}>👁 Preview frames</button>
+                <button className="btn btn-primary" disabled={generating} onClick={generateGif}>
+                  {generating ? `⏳ ${status} ${progress}%` : '🔮 Generate GIF'}
+                </button>
+              </div>
+            </div>
+          )}
+          {img && (
+            <div className="card">
+              <div className="card-title">Spritesheet preview</div>
+              <div style={{position:'relative',display:'inline-block',maxWidth:'100%',overflow:'auto',background:'#111',borderRadius:8,padding:4}}>
+                <img ref={imgRef} src={imgSrc} alt="spritesheet" style={{display:'block',maxWidth:'100%',imageRendering:'pixelated'}} />
+                <canvas ref={overlayRef} style={{position:'absolute',top:4,left:4,width:'calc(100% - 8px)',height:'calc(100% - 8px)',pointerEvents:'none'}} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right column: extracted frames + GIF output */}
+        <div className="gap">
+          {frames.length > 0 && (
+            <div className="card">
+              <div className="card-title">Extracted Frames ({frames.length})</div>
+              <div className="frame-strip">
+                {frames.map((src, i) => (
+                  <div key={i} className="frame-thumb">
+                    <img src={src} alt={`f${i+1}`} />
+                    <div className="frame-num">#{i+1}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {gifUrl && (
+            <div className="card">
+              <div className="card-title">Generated GIF</div>
+              <div style={{display:'flex',gap:16,alignItems:'flex-start',flexWrap:'wrap'}}>
+                <div style={{background:'#000',padding:8,borderRadius:8,border:'1px solid var(--border)'}}>
+                  <img src={gifUrl} alt="gif" style={{imageRendering:'pixelated',display:'block',maxWidth:320}} />
+                </div>
+                <a href={gifUrl} download="sprite-animation.gif">
+                  <button className="btn btn-accent" style={{marginTop:8}}>⬇ Download GIF</button>
+                </a>
+              </div>
+            </div>
+          )}
+
+          {!frames.length && !gifUrl && (
+            <div className="card" style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:200,color:'var(--subtle)',flexDirection:'column',gap:10}}>
+              <div style={{fontSize:'2.5rem'}}>🎞</div>
+              <div style={{fontSize:'.85rem'}}>Drop a sprite sheet on the left</div>
+              <div style={{fontSize:'.75rem',color:'var(--border)',maxWidth:200,textAlign:'center'}}>then preview frames or generate a GIF</div>
+            </div>
+          )}
+        </div>
+      </div>
+      <canvas ref={tempRef} style={{display:'none'}} />
+    </div>
+  );
+}
+
 // ── App ──
 function App() {
   const [tab, setTab] = useState('convert');
@@ -860,21 +1366,51 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <a href="./index.html" className="back-btn">← Simulator</a>
-        <h1 className="app-title">✨ Sablina Animation Studio</h1>
-        <span className="subtitle">ESP32 · RGB565 converter · Three.js · React</span>
-      </header>
 
+      {/* Titlebar */}
+      <div className="app-titlebar">
+        <div className="tb-logo">
+          <span className="tb-logo-icon">🎞</span>
+          Animation Studio
+        </div>
+        <div className="tb-sep"/>
+        <nav className="tb-breadcrumb">
+          <a href="./index.html">Simulator</a>
+          <span className="sep">/</span>
+          <span className="current">Animation Studio</span>
+        </nav>
+        <div className="tb-right">
+          <span className="tb-badge">ESP32 · RGB565</span>
+          <span className="tb-badge">gif.js 0.2.0</span>
+          <span className="tb-badge">omggif</span>
+        </div>
+      </div>
+
+      {/* Tab bar */}
       <div className="tabs">
-        {[['convert','⚡ Convert'],['library','📂 Library'],['about','📖 Format']].map(([id,label])=>(
+        {[['convert','⚡ Convert to .h'],['library','📂 Animation Library'],['gifmaker','🎞 GIF Maker'],['about','📖 Format Reference']].map(([id,label])=>(
           <button key={id} className={`tab-btn${tab===id?' active':''}`} onClick={()=>setTab(id)}>{label}</button>
         ))}
       </div>
 
-      {tab === 'convert'  && <ConvertTab addToast={addToast} />}
-      {tab === 'library'  && <LibraryTab />}
-      {tab === 'about'    && <AboutTab />}
+      {/* Content */}
+      <div className="app-body">
+        <div className="app-content">
+          {tab === 'convert'  && <ConvertTab addToast={addToast} />}
+          {tab === 'library'  && <LibraryTab addToast={addToast} />}
+          {tab === 'gifmaker' && <GifMakerTab addToast={addToast} />}
+          {tab === 'about'    && <AboutTab />}
+        </div>
+      </div>
+
+      {/* Status bar */}
+      <div className="status-bar">
+        <span>Animation Studio</span>
+        <span className="sb-sep">|</span>
+        <a href="./index.html">← Back to Simulator</a>
+        <span className="sb-sep">|</span>
+        <span>Output: RGB565 16-bit .h headers for ESP32 / Arduino</span>
+      </div>
 
       <Toast toasts={toasts} />
     </div>
