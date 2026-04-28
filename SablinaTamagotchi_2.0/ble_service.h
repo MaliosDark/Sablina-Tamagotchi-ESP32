@@ -84,8 +84,8 @@ public:
     SablinaBLE* parent;
     ConfigCB(SablinaBLE* p) : parent(p) {}
     void onWrite(BLECharacteristic* ch) override {
-      std::string val = ch->getValue();
-      if (val.empty()) return;
+      String val = ch->getValue();
+      if (!val.length()) return;
       JsonDocument doc;
       if (deserializeJson(doc, val.c_str())) return;
       // WiFi
@@ -115,10 +115,10 @@ public:
   //   "feed" | "clean" | "sleep" | "play" | "pet" | "heal" | "wake"
   class CmdCB : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* ch) override {
-      std::string val = ch->getValue();
-      if (val.empty()) return;
+      String val = ch->getValue();
+      if (!val.length()) return;
       g_bleCmd.cmd[0] = '\0';
-      strlcpy(g_bleCmd.cmd, val.c_str(), sizeof(g_bleCmd.cmd));
+      strlcpy((char*)g_bleCmd.cmd, val.c_str(), sizeof(g_bleCmd.cmd));
       g_bleCmd.pending = true;
     }
   };
@@ -126,8 +126,8 @@ public:
   // ── Personality characteristic write callback ───────────────────
   class PersonalityCB : public BLECharacteristicCallbacks {
     void onWrite(BLECharacteristic* ch) override {
-      std::string val = ch->getValue();
-      if (val.empty()) return;
+      String val = ch->getValue();
+      if (!val.length()) return;
       extern class LLMPersonality g_llm;
       g_llm.setTraitsFromJson(val.c_str());
       // Echo back updated traits
@@ -379,7 +379,7 @@ private:
     dst[outIdx] = '\0';
   }
 
-  std::string buildPeerPayload() const {
+  String buildPeerPayload() const {
     char fixedText[BLE_PEER_MESSAGE_MAX_TEXT + 1];
     sanitizePeerText(_peerOutgoing.text, fixedText, sizeof(fixedText));
 
@@ -398,15 +398,15 @@ private:
     for (size_t i = 0; i < BLE_PEER_MESSAGE_MAX_TEXT; ++i) {
       payload.push_back(fixedText[i] ? fixedText[i] : '\0');
     }
-    return payload;
+    return String(payload.c_str(), payload.size());
   }
 
-  static bool decodePeerPayload(const std::string& raw, BLEPeerMessage* out) {
+  static bool decodePeerPayload(const String& raw, BLEPeerMessage* out) {
     if (!out) return false;
     *out = BLEPeerMessage{};
-    if (raw.size() < (10 + BLE_PEER_MESSAGE_MAX_TEXT)) return false;
+    if ((size_t)raw.length() < (10 + BLE_PEER_MESSAGE_MAX_TEXT)) return false;
 
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(raw.data());
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(raw.c_str());
     if (bytes[0] != PEER_COMPANY_ID_LO || bytes[1] != PEER_COMPANY_ID_HI) return false;
     if (bytes[2] != PEER_MAGIC_0 || bytes[3] != PEER_MAGIC_1) return false;
     if (bytes[4] != PEER_VERSION) return false;
@@ -417,7 +417,7 @@ private:
     out->isReply = (bytes[9] == PEER_KIND_REPLY);
 
     size_t textIdx = 0;
-    for (size_t i = 10; i < raw.size() && textIdx < BLE_PEER_MESSAGE_MAX_TEXT; ++i) {
+    for (size_t i = 10; i < (size_t)raw.length() && textIdx < BLE_PEER_MESSAGE_MAX_TEXT; ++i) {
       const char ch = raw[i];
       if (ch == '\0') break;
       if (static_cast<unsigned char>(ch) < 32 || static_cast<unsigned char>(ch) > 126) continue;
@@ -464,7 +464,7 @@ private:
     _peerIncomingPending = true;
   }
 
-  void rememberPeer(const BLEAdvertisedDevice& advertisedDevice) {
+  void rememberPeer(BLEAdvertisedDevice& advertisedDevice) {
     if (advertisedDevice.haveManufacturerData()) {
       BLEPeerMessage incoming;
       if (decodePeerPayload(advertisedDevice.getManufacturerData(), &incoming)) {
@@ -474,8 +474,8 @@ private:
 
     if (!advertisedDevice.haveName()) return;
 
-    std::string peerNameValue = advertisedDevice.getName();
-    if (peerNameValue.empty()) return;
+    String peerNameValue = advertisedDevice.getName();
+    if (!peerNameValue.length()) return;
 
     char foundName[sizeof(peer.name)];
     strlcpy(foundName, peerNameValue.c_str(), sizeof(foundName));

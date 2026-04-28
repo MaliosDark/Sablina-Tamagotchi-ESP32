@@ -89,6 +89,7 @@
 #include "gamegif.h"
 #include "gardengif.h"
 #include "sleepgif.h"
+#include "sablinasleep.h"
 #include "gamewalk.h"
 
 
@@ -228,9 +229,35 @@ int pic = 0;//picture_group数组序号
 int boxx1 = 101, boxy1 = 99, boxx2 = 26, boxy2 = 18;
 bool darkmode = 0;//主屏幕模式0为亮，1为暗；
 
-// Backlight brightness table (higher = brighter for most boards)
-int bright[] = {10, 40, 80, 130, 200, 245};
+// Backlight brightness table (higher = brighter)
+int bright[] = {BRIGHT_LEVELS[0], BRIGHT_LEVELS[1], BRIGHT_LEVELS[2], BRIGHT_LEVELS[3], BRIGHT_LEVELS[4], BRIGHT_LEVELS[5]};
 int b = BL_DEFAULT_IDX;
+
+static inline void applyBacklightRaw(int level)
+{
+#if BL_FORCE_ALWAYS_ON
+  (void)level;
+  digitalWrite(TFT_BL_PIN, HIGH);
+#if TFT_BL_PIN_ALT >= 0
+  digitalWrite(TFT_BL_PIN_ALT, HIGH);
+#endif
+  return;
+#endif
+
+  int maxLevel = (1 << BL_PWM_RES) - 1;
+  if (level < 0) level = 0;
+  if (level > maxLevel) level = maxLevel;
+
+  // Keep both PWM and direct digital drive to maximize compatibility
+  // with board revisions/clones that wire BL differently.
+  ledcWrite(TFT_BL_PIN, level);
+  digitalWrite(TFT_BL_PIN, level > (maxLevel / 2) ? HIGH : LOW);
+
+#if TFT_BL_PIN_ALT >= 0
+  ledcWrite(TFT_BL_PIN_ALT, level);
+  digitalWrite(TFT_BL_PIN_ALT, level > (maxLevel / 2) ? HIGH : LOW);
+#endif
+}
 
 int gamenum_left;
 int gamenum_right;
@@ -4500,7 +4527,9 @@ void Time()
             {
               b = 0;
             }
-            ledcWrite(TFT_BL_PIN, bright[b]);
+#if !BL_FORCE_ALWAYS_ON
+            applyBacklightRaw(bright[b]);
+#endif
             tft.drawString(String(b), 35, 40, 4);
             delay(300);
           }
@@ -4634,9 +4663,22 @@ void setup()
   tft.setSwapBytes(true);
   // Centre the legacy 128×128 game canvas in the display
   tft.setViewport(GAME_X, GAME_Y, GAME_W, GAME_H);
+  // Force BL line high first, then attach PWM (matches board behavior better).
+  pinMode(TFT_BL_PIN, OUTPUT);
+  digitalWrite(TFT_BL_PIN, HIGH);
+#if TFT_BL_PIN_ALT >= 0
+  pinMode(TFT_BL_PIN_ALT, OUTPUT);
+  digitalWrite(TFT_BL_PIN_ALT, HIGH);
+#endif
+  delay(10);
+#if !BL_FORCE_ALWAYS_ON
   // Backlight via new ledcAttach API (ESP32-S3 core ≥ 3.x)
   ledcAttach(TFT_BL_PIN, BL_PWM_FREQ, BL_PWM_RES);
-  ledcWrite(TFT_BL_PIN, bright[b]);
+#if TFT_BL_PIN_ALT >= 0
+  ledcAttach(TFT_BL_PIN_ALT, BL_PWM_FREQ, BL_PWM_RES);
+#endif
+  applyBacklightRaw(bright[b]);
+#endif
 
   // ── RGB LED ────────────────────────────────────────────────────
   g_rgb.begin();
@@ -5644,7 +5686,7 @@ void handleBleCmdIfAny() {
   if (!g_bleCmd.pending) return;
   unsigned long now = millis();
   g_bleCmd.pending = false;
-  const char* cmd = g_bleCmd.cmd;
+  const char* cmd = (const char*)g_bleCmd.cmd;
 
   if (strcmp(cmd, "feed") == 0) {
     strlcpy(g_targetRoom, "KITCHEN", sizeof(g_targetRoom));

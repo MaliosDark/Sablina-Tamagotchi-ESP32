@@ -872,7 +872,7 @@ function serializeSpritesJs() {
   return lines.join('\n');
 }
 
-// ── SpriteThumb — renders first frame of a sprite from window.ORIGINAL_SPRITES ──
+// ── SpriteThumb, renders first frame of a sprite from window.ORIGINAL_SPRITES ──
 function SpriteThumb({ name, color, onReplace, modified, isNew }) {
   const canvasRef = useRef();
   const [ver, setVer] = useState(0); // bump to force repaint after replace
@@ -912,8 +912,8 @@ function SpriteThumb({ name, color, onReplace, modified, isNew }) {
         <div className="lib-replace-overlay">
           <button className="lib-replace-btn" onClick={triggerReplace} title={`Replace ${name}`}>↑ Replace</button>
         </div>
-        {modified && <div className="lib-modified-dot" title="Modified — export sprites.js to save"/>}
-        {isNew && !modified && <div className="lib-new-dot" title="New sprite — export sprites.js to save"/>}
+        {modified && <div className="lib-modified-dot" title="Modified, export sprites.js to save"/>}
+        {isNew && !modified && <div className="lib-new-dot" title="New sprite, export sprites.js to save"/>}
       </div>
       <div className="lib-name" style={{color: color+'cc'}}>{name}</div>
     </div>
@@ -969,7 +969,7 @@ function LibraryTab({ addToast }) {
     if (!name) { addToast('Enter a sprite name first.', 'err'); return; }
     if (/\s/.test(name)) { addToast('Sprite name cannot have spaces.', 'err'); return; }
     if (window.ORIGINAL_SPRITES && window.ORIGINAL_SPRITES[name]) {
-      addToast(`"${name}" already exists — use ↑ Replace instead.`, 'err'); return;
+      addToast(`"${name}" already exists, use ↑ Replace instead.`, 'err'); return;
     }
     addFileInputRef.current.value = '';
     addFileInputRef.current.click();
@@ -1029,7 +1029,7 @@ function LibraryTab({ addToast }) {
           className={`btn btn-primary lib-export-btn${modified.size>0?' has-changes':''}`}
           onClick={doExport}
           disabled={exporting}
-          title={modified.size>0 ? `${modified.size} sprite(s) modified — download new sprites.js` : 'No changes yet'}
+          title={modified.size>0 ? `${modified.size} sprite(s) modified, download new sprites.js` : 'No changes yet'}
         >
           {exporting ? '⏳' : '⬇'} Export sprites.js{modified.size > 0 ? ` (${modified.size})` : ''}
         </button>
@@ -1208,7 +1208,7 @@ function GifMakerTab({ addToast }) {
 
   function generateGif() {
     if (!img) return;
-    if (!window.GIF) { addToast('GIF library not loaded — reload the page', 'err'); return; }
+    if (!window.GIF) { addToast('GIF library not loaded, reload the page', 'err'); return; }
     const { srcs, fw, fh } = buildFrameDataURLs();
     setFrames(srcs);
     setGenerating(true); setProgress(0); setGifUrl(null);
@@ -1281,7 +1281,7 @@ function GifMakerTab({ addToast }) {
           {dropZoneCard}
           {img && (
             <div className="card">
-              <div className="card-title">Settings — {img.width}×{img.height}px · {rows*cols} frames</div>
+              <div className="card-title">Settings, {img.width}×{img.height}px · {rows*cols} frames</div>
               <div className="settings-grid">
                 {numFields.map(([label, val, setter, min, max]) => (
                   <div key={label} className="field">
