@@ -248,11 +248,14 @@ static inline void applyBacklightRaw(int level)
   if (level < 0) level = 0;
   if (level > maxLevel) level = maxLevel;
 
-  // This board variant needs a real PWM signal on GPIO46.
+  // Keep both PWM and direct digital drive to maximize compatibility
+  // with board revisions/clones that wire BL differently.
   ledcWrite(TFT_BL_PIN, level);
+  digitalWrite(TFT_BL_PIN, level > (maxLevel / 2) ? HIGH : LOW);
 
 #if TFT_BL_PIN_ALT >= 0
   ledcWrite(TFT_BL_PIN_ALT, level);
+  digitalWrite(TFT_BL_PIN_ALT, level > (maxLevel / 2) ? HIGH : LOW);
 #endif
 }
 
@@ -4660,12 +4663,12 @@ void setup()
   tft.setSwapBytes(true);
   // Centre the legacy 128×128 game canvas in the display
   tft.setViewport(GAME_X, GAME_Y, GAME_W, GAME_H);
-  // This board variant responds on GPIO46 with PWM, not a forced HIGH level.
+  // Force BL line high first, then attach PWM (matches board behavior better).
   pinMode(TFT_BL_PIN, OUTPUT);
-  digitalWrite(TFT_BL_PIN, LOW);
+  digitalWrite(TFT_BL_PIN, HIGH);
 #if TFT_BL_PIN_ALT >= 0
   pinMode(TFT_BL_PIN_ALT, OUTPUT);
-  digitalWrite(TFT_BL_PIN_ALT, LOW);
+  digitalWrite(TFT_BL_PIN_ALT, HIGH);
 #endif
   delay(10);
 #if !BL_FORCE_ALWAYS_ON

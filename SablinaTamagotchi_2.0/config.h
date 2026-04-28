@@ -19,7 +19,7 @@
 //  #define TFT_CS      42
 //  #define TFT_DC      41
 //  #define TFT_RST     39
-//  #define TFT_BL      48        // backlight – controlled by ledcAttach/digital HIGH
+//  #define TFT_BL      46        // backlight on this verified board variant
 //  #define TFT_OFFSET_X 34
 //  #define TFT_OFFSET_Y  0
 //  #define TFT_INVERSION_ON
@@ -28,8 +28,8 @@
 // ──────────────────────────────────────────────────────────────────
 
 // ── Display ───────────────────────────────────────────────────────
-#define TFT_BL_PIN      48      // PWM backlight pin
-#define TFT_BL_PIN_ALT  47      // fallback BL pin on some board variants (-1 to disable)
+#define TFT_BL_PIN      46      // verified PWM backlight pin on this board
+#define TFT_BL_PIN_ALT  -1      // disable fallback to avoid driving the wrong BL path
 #define SCREEN_W       320      // physical pixels after rotation-1 (landscape)
 #define SCREEN_H       172
 // Legacy game canvas  (all original coordinates still valid)
@@ -68,11 +68,12 @@
 // ── PWM backlight ─────────────────────────────────────────────────
 #define BL_PWM_FREQ     1000
 #define BL_PWM_RES        10
-// Waveshare official profile: 10-bit PWM on GPIO48, higher = brighter.
-const int BRIGHT_LEVELS[] = {120, 260, 420, 620, 820, 980};
+// This board variant responds to 10-bit PWM on GPIO46, with max duty required
+// for a reliably visible backlight.
+const int BRIGHT_LEVELS[] = {120, 260, 420, 620, 820, 1023};
 #define BL_DEFAULT_IDX     5
-// Emergency recovery mode: keep LCD backlight pin always HIGH (no PWM).
-#define BL_FORCE_ALWAYS_ON 1
+// Keep PWM enabled; this board was verified on GPIO46 with PWM MAX.
+#define BL_FORCE_ALWAYS_ON 0
 
 // ── WiFi (stored in NVS; these are just compile-time defaults) ─────
 #define WIFI_SSID_DEFAULT  ""
