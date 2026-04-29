@@ -146,6 +146,234 @@ public:
     return names[currentMood];
   }
 
+  // ── Peer social line generator (uses anti-repeat engine) ────────
+  // Picks a short phrase (≤15 chars) for BLE peer chat, personality-aware.
+  // call from choosePeerOfferText / choosePeerReplyText in the main sketch.
+  void pickPeerLine(const char* const* opts, uint8_t count,
+                    char* out, size_t outLen) {
+    if (!opts || count == 0 || !out || outLen == 0) { out[0]='\0'; return; }
+    uint8_t start = (uint8_t)random(0, count);
+    for (uint8_t i = 0; i < count; ++i) {
+      const char* c = opts[(start + i) % count];
+      if (!_recentlyUsedOfflineLine(c)) {
+        strlcpy(out, c, outLen);
+        _rememberOfflineLine(c);
+        return;
+      }
+    }
+    strlcpy(out, opts[start], outLen);
+    _rememberOfflineLine(out);
+  }
+
+  // ── Public peer-chat helpers (call from main sketch) ────────────
+  // All phrases are ≤15 chars to fit the BLE payload limit.
+public:
+  void peerOffer(bool justDetected, int affinity, int hun, int fat, int cle,
+                 char* out, size_t outLen) {
+    if (!out || outLen == 0) return;
+    out[0] = '\0';
+
+    if (justDetected) {
+      if (affinity >= 50) {
+        static const char* hi[] = {
+          "Missed you!", "There you are!", "You're back!", "Finally, hi!",
+          "I missed you!", "Long time!", "Found you again!"
+        };
+        pickPeerLine(hi, 7, out, outLen);
+      } else if (affinity >= 20) {
+        static const char* hi[] = {
+          "Hey, you're here!", "Oh hey!", "You again!", "Still around?",
+          "Hey there!", "Good to meet!", "Hi, neighbor!"
+        };
+        pickPeerLine(hi, 7, out, outLen);
+      } else {
+        static const char* hi[] = {
+          "Hello nearby.", "Hey, stranger!", "Hi there!", "Oh! Company!",
+          "Hello!", "I see you!", "Who's nearby?"
+        };
+        pickPeerLine(hi, 7, out, outLen);
+      }
+      return;
+    }
+
+    // Ongoing chat — mood-driven
+    if (currentMood == MOOD_PLAYFUL || currentMood == MOOD_EXCITED) {
+      static const char* play[] = {
+        "Race time?", "Wanna play?", "Let's have fun!", "Challenge me!",
+        "Catch up fast!", "Tag, you're it!", "Play with me?"
+      };
+      pickPeerLine(play, 7, out, outLen);
+    } else if (currentMood == MOOD_HUNGRY || hun < 35) {
+      static const char* eat[] = {
+        "Snacks hunt?", "Feed me first?", "I need snacks.", "So hungry...",
+        "Hungry here!", "Find food?", "Empty tummy!"
+      };
+      pickPeerLine(eat, 7, out, outLen);
+    } else if (currentMood == MOOD_TIRED || fat < 35) {
+      static const char* rest[] = {
+        "Slow walk?", "I'm tired too.", "Rest a bit?", "Need a break.",
+        "Sleepy today.", "Walk slowly?", "Low energy..."
+      };
+      pickPeerLine(rest, 7, out, outLen);
+    } else if (currentMood == MOOD_DIRTY || cle < 35) {
+      static const char* cln[] = {
+        "Need a bath.", "So dusty here.", "Clean up time?", "Dirty today.",
+        "Let's clean?", "Bath needed!", "Messy day..."
+      };
+      pickPeerLine(cln, 7, out, outLen);
+    } else if (traits.grumpiness > 60) {
+      static const char* grump[] = {
+        "What do you want?", "Leave me alone.", "Hmph.", "Not today.",
+        "I'm busy.", "Just passing.", "Go away!"
+      };
+      pickPeerLine(grump, 7, out, outLen);
+    } else if (traits.sociability > 60 || affinity >= 25) {
+      static const char* social[] = {
+        "How are you?", "Miss me?", "Stay close.", "Signal check!",
+        "Good to see you", "Tell me a story", "Wanna chat?"
+      };
+      pickPeerLine(social, 7, out, outLen);
+    } else {
+      static const char* gen[] = {
+        "You're close.", "Hello again!", "Hey again!", "You're near!",
+        "Come here!", "I see you.", "Oh hey!"
+      };
+      pickPeerLine(gen, 7, out, outLen);
+    }
+  }
+
+  void peerReply(const char* peerText, int affinity, int hun, int fat, int cle,
+                 char* out, size_t outLen) {
+    if (!out || outLen == 0) return;
+    out[0] = '\0';
+    String msg = String(peerText ? peerText : "");
+    msg.toLowerCase();
+
+    // Context-sensitive replies first
+    if (msg.indexOf("race") >= 0 || msg.indexOf("challenge") >= 0 ||
+        msg.indexOf("tag") >= 0  || msg.indexOf("catch") >= 0) {
+      static const char* race[] = {
+        "You're on!", "Try to keep up!", "Ready? Go!", "I'm faster!",
+        "Let's do this!", "Game on!", "You can't catch me"
+      };
+      pickPeerLine(race, 7, out, outLen);
+    } else if (msg.indexOf("play") >= 0 || msg.indexOf("fun") >= 0 ||
+               msg.indexOf("wanna") >= 0) {
+      static const char* play[] = {
+        "Yes! Let's play!", "Always! Let's go", "Sure, why not?", "I'm in!",
+        "Of course!", "Let's do it!", "Fun time!"
+      };
+      pickPeerLine(play, 7, out, outLen);
+    } else if (msg.indexOf("snack") >= 0 || msg.indexOf("food") >= 0 ||
+               msg.indexOf("hungry") >= 0 || msg.indexOf("eat") >= 0) {
+      if (affinity >= 25) {
+        static const char* food[] = {
+          "Snack gift!", "Here, take this!", "Sharing is caring",
+          "Have some snacks!", "Eat up, friend!", "I'll share mine.",
+          "Snacks together!"
+        };
+        pickPeerLine(food, 7, out, outLen);
+      } else {
+        static const char* food[] = {
+          "I'm hungry too.", "Find food first?", "Same here...",
+          "I need snacks too", "Let's find food.", "Starving here!",
+          "Me too, actually."
+        };
+        pickPeerLine(food, 7, out, outLen);
+      }
+    } else if (msg.indexOf("tired") >= 0 || msg.indexOf("rest") >= 0 ||
+               msg.indexOf("slow") >= 0 || msg.indexOf("sleep") >= 0) {
+      if (affinity >= 25) {
+        static const char* rest[] = {
+          "Rest gift!", "Take it easy.", "I'll help you rest",
+          "Slow down with me", "Nap time?", "Rest well, friend",
+          "Let's rest together"
+        };
+        pickPeerLine(rest, 7, out, outLen);
+      } else {
+        static const char* rest[] = {
+          "I'll keep pace.", "Slow is fine.", "Rest a bit then.",
+          "I'm tired too.", "Let's both rest.", "Take your time.",
+          "No rush here."
+        };
+        pickPeerLine(rest, 7, out, outLen);
+      }
+    } else if (msg.indexOf("clean") >= 0 || msg.indexOf("bath") >= 0 ||
+               msg.indexOf("dust") >= 0 || msg.indexOf("dirty") >= 0) {
+      if (affinity >= 25) {
+        static const char* cln[] = {
+          "Clean gift!", "I'll help you!", "Bath time!", "Scrub scrub!",
+          "Clean together!", "Let me help.", "Cleanliness wins!"
+        };
+        pickPeerLine(cln, 7, out, outLen);
+      } else {
+        static const char* cln[] = {
+          "We can clean.", "Soap time?", "Dirty too?", "Let's tidy up.",
+          "Yeah, let's wash.", "Messy here too.", "Clean up crew!"
+        };
+        pickPeerLine(cln, 7, out, outLen);
+      }
+    } else if (msg.indexOf("miss") >= 0 || msg.indexOf("found") >= 0 ||
+               msg.indexOf("back") >= 0 || msg.indexOf("there") >= 0) {
+      if (affinity >= 50) {
+        static const char* miss[] = {
+          "Missed you too!", "I was waiting!", "So glad you're here",
+          "Finally together!", "Don't go again!", "You were gone long",
+          "Yay, you're back!"
+        };
+        pickPeerLine(miss, 7, out, outLen);
+      } else {
+        static const char* miss[] = {
+          "I see you too.", "Good to meet!", "Hello again!", "Hi there!",
+          "Nice to see you.", "You're around!", "Hey, you're here."
+        };
+        pickPeerLine(miss, 7, out, outLen);
+      }
+    } else if (msg.indexOf("signal") >= 0 || msg.indexOf("check") >= 0) {
+      static const char* sig[] = {
+        "Signal strong!", "Loud and clear!", "I hear you!",
+        "Receiving you!", "5 by 5!", "Clear signal!", "Roger that!"
+      };
+      pickPeerLine(sig, 7, out, outLen);
+    } else if (msg.indexOf("hello") >= 0 || msg.indexOf("hey") >= 0 ||
+               msg.indexOf("hi") >= 0) {
+      if (currentMood == MOOD_PLAYFUL || currentMood == MOOD_EXCITED) {
+        static const char* hi[] = {
+          "Heyyyy!", "Oh hiiii!", "Finally!", "YAY, hi!",
+          "So excited!", "Hi hi hi!", "Woooo!"
+        };
+        pickPeerLine(hi, 7, out, outLen);
+      } else {
+        static const char* hi[] = {
+          "Hey there!", "Oh hi!", "Hello!", "I see you!",
+          "Hi neighbor!", "Good to see ya", "Hey yourself!"
+        };
+        pickPeerLine(hi, 7, out, outLen);
+      }
+    } else {
+      // Generic mood-based reply
+      if (currentMood == MOOD_PLAYFUL) {
+        static const char* p[] = {
+          "Sounds fun!", "Let's do it!", "You're funny!", "Haha, yes!",
+          "I'm listening!", "Interesting...", "Tell me more!"
+        };
+        pickPeerLine(p, 7, out, outLen);
+      } else if (currentMood == MOOD_SAD || currentMood == MOOD_BORED) {
+        static const char* s[] = {
+          "I hear you.", "Okay then...", "If you say so.", "Hmm, I see.",
+          "Sure, whatever.", "Okay, fine.", "Noted."
+        };
+        pickPeerLine(s, 7, out, outLen);
+      } else {
+        static const char* g[] = {
+          "Good to see you.", "Stay nearby!", "I like that.", "You're nice!",
+          "Makes sense.", "Cool!", "Agreed!"
+        };
+        pickPeerLine(g, 7, out, outLen);
+      }
+    }
+  }
+
 private:
   Preferences* _prefs = nullptr;
   char  _apiKey[128]  = "";

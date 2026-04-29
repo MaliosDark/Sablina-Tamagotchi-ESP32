@@ -6464,72 +6464,17 @@ void triggerPeerConversation(const char* localText, const char* peerName, const 
 void choosePeerOfferText(bool justDetected, char* out, size_t outLen) {
   if (!out || outLen == 0) return;
   out[0] = '\0';
-
   const SocialPeerMemory* peer = findSocialPeer(g_ble.peer.senderId);
   const int affinity = peer ? peer->affinity : 0;
-  const bool bonded = affinity >= 25;
-
-  if (justDetected) {
-    strlcpy(out, affinity >= 50 ? "Missed you." : "Hello nearby.", outLen);
-  } else if (bonded && Hun < 45) {
-    strlcpy(out, "Snack gift.", outLen);
-  } else if (bonded && Fat < 45) {
-    strlcpy(out, "Rest gift.", outLen);
-  } else if (bonded && Cle < 45) {
-    strlcpy(out, "Clean gift.", outLen);
-  } else if (bonded && Exp < 8) {
-    strlcpy(out, "Coin gift.", outLen);
-  } else if (Hun < 35) {
-    strlcpy(out, "Snacks hunt?", outLen);
-  } else if (Fat < 35) {
-    strlcpy(out, "Slow walk?", outLen);
-  } else if (Cle < 35) {
-    strlcpy(out, "Need a bath.", outLen);
-  } else if (g_llm.currentMood == MOOD_PLAYFUL || g_llm.currentMood == MOOD_EXCITED) {
-    strlcpy(out, "Race time?", outLen);
-  } else if (g_ble.peerRssi() > -62 && affinity >= 50) {
-    strlcpy(out, "Stay close.", outLen);
-  } else if (g_ble.peerRssi() > -62) {
-    strlcpy(out, "You're close.", outLen);
-  } else {
-    strlcpy(out, affinity >= 25 ? "How are you?" : "Good to see you.", outLen);
-  }
+  g_llm.peerOffer(justDetected, affinity, Hun, Fat, Cle, out, outLen);
 }
 
 void choosePeerReplyText(const char* peerText, char* out, size_t outLen) {
   if (!out || outLen == 0) return;
   out[0] = '\0';
-
-  String msg = String(peerText ? peerText : "");
-  msg.toLowerCase();
   const SocialPeerMemory* peer = findSocialPeer(g_ble.peer.senderId);
   const int affinity = peer ? peer->affinity : 0;
-
-  if (msg.indexOf("snack gift") >= 0 || msg.indexOf("rest gift") >= 0 || msg.indexOf("clean gift") >= 0 || msg.indexOf("coin gift") >= 0) {
-    strlcpy(out, "Thank you.", outLen);
-  } else if (msg.indexOf("missed") >= 0 || msg.indexOf("found") >= 0 || msg.indexOf("hello") >= 0) {
-    strlcpy(out, affinity >= 50 ? "Missed you too." : "I see you too.", outLen);
-  } else if (msg.indexOf("snack") >= 0 || msg.indexOf("hunt") >= 0) {
-    strlcpy(out, affinity >= 25 ? "Snack gift." : "I know a trail.", outLen);
-  } else if (msg.indexOf("walk") >= 0) {
-    strlcpy(out, affinity >= 25 ? "Rest gift." : "I'll keep pace.", outLen);
-  } else if (msg.indexOf("bath") >= 0 || msg.indexOf("dust") >= 0) {
-    strlcpy(out, affinity >= 25 ? "Clean gift." : "We can clean.", outLen);
-  } else if (msg.indexOf("race") >= 0 || msg.indexOf("signal") >= 0) {
-    strlcpy(out, "You're on.", outLen);
-  } else if (msg.indexOf("close") >= 0 || msg.indexOf("chat") >= 0) {
-    strlcpy(out, "Stay close.", outLen);
-  } else if (msg.indexOf("coin") >= 0 && affinity >= 25) {
-    strlcpy(out, "Coin gift.", outLen);
-  } else if (Hun < 35) {
-    strlcpy(out, affinity >= 25 ? "Snack gift." : "Need snacks too.", outLen);
-  } else if (Fat < 35) {
-    strlcpy(out, affinity >= 25 ? "Rest gift." : "Slow is fine.", outLen);
-  } else if (Cle < 35) {
-    strlcpy(out, affinity >= 25 ? "Clean gift." : "Need to clean.", outLen);
-  } else {
-    strlcpy(out, "Good to see you.", outLen);
-  }
+  g_llm.peerReply(peerText, affinity, Hun, Fat, Cle, out, outLen);
 }
 
 void handleIncomingPeerMessage(const BLEPeerMessage& msg, unsigned long nowMs) {
