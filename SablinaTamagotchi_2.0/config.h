@@ -114,12 +114,12 @@ const int BRIGHT_LEVELS[] = {120, 260, 420, 620, 820, 1023};
 
 // BLE notify interval
 #define BLE_NOTIFY_INTERVAL_MS   2000UL
-#define BLE_PEER_SCAN_INTERVAL_MS 9000UL
-#define BLE_PEER_SCAN_DURATION_S 2
-#define BLE_PEER_TIMEOUT_MS      16000UL
-#define BLE_PEER_CHAT_INTERVAL_MS 18000UL
-#define BLE_PEER_MESSAGE_TTL_MS   6000UL
-#define BLE_PEER_MESSAGE_MAX_TEXT 16
+#define BLE_PEER_SCAN_INTERVAL_MS 3000UL   // scan more often
+#define BLE_PEER_SCAN_DURATION_S  2        // 2-second window (was 1)
+#define BLE_PEER_TIMEOUT_MS      12000UL   // 4 scan cycles to lose peer
+#define BLE_PEER_CHAT_INTERVAL_MS 12000UL
+#define BLE_PEER_MESSAGE_TTL_MS   9000UL   // longer than 3 scan cycles
+#define BLE_PEER_MESSAGE_MAX_TEXT 15
 #define MAX_SOCIAL_PEERS          6
 
 // Dual-speaker chat bubble colors (RGB565)

@@ -5435,6 +5435,8 @@ void mainselect()
 
 void setup() 
 {
+  Serial.begin(115200);  // USB CDC — required for Serial.printf to work on ESP32-S3
+
   // ── Buttons ────────────────────────────────────────────────────
   pinMode(BTN_A_PIN, INPUT_PULLUP);
   pinMode(BTN_B_PIN, INPUT_PULLUP);
@@ -6601,6 +6603,29 @@ void maybeBlePeerExchange(unsigned long nowMs) {
   const bool justDetected = !g_peerWasVisible;
   g_peerWasVisible = true;
   notePeerEncounter(g_ble.peer.senderId, g_ble.peerName(), justDetected);
+
+  // ── Immediate single-speaker bubble on first detection ──────────
+  // Show the greeting right away instead of waiting for the full 2-way exchange.
+  // The dual-speaker bubble will replace this when the reply arrives.
+  if (justDetected && !g_popupUntilMs) {
+    char firstSeen[BLE_PEER_MESSAGE_MAX_TEXT + 1];
+    choosePeerOfferText(true, firstSeen, sizeof(firstSeen));
+    if (firstSeen[0]) {
+      strlcpy(g_popupText, firstSeen, sizeof(g_popupText));
+      g_popupPeerText[0] = '\0';
+      g_popupDualSpeaker = false;
+      g_popupUntilMs = nowMs + 5000;
+      g_pendingBeeps = SOUND_NOTIFY_BEEPS;
+      g_pendingVibes = VIBRO_NOTIFY_PULSES;
+      g_lastBeepMs = 0;
+    }
+  }
+
+  if (g_popupUntilMs && nowMs < g_popupUntilMs && !justDetected) {
+    return;
+  }
+
+  // Don't queue another offer while we're still waiting for a reply.
   if (g_lastPeerOfferSeq) {
     return;
   }

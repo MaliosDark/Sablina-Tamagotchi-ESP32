@@ -20,6 +20,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <ctype.h>
+// esp_ble_gap_config_adv_data_raw is available via BLEDevice.h → esp_gap_ble_api.h
 
 // Forward declaration of globals the BLE callbacks need to access
 // (defined in main .ino)
@@ -205,16 +206,28 @@ public:
     pAdv->setScanResponse(true);
     pAdv->setMinPreferred(0x06);
     _advertising = pAdv;
-    refreshAdvertising();
+    // Use standard (non-custom) advertising start — Bluedroid builds the packet
+    // automatically including the device name and service UUID without any
+    // async race conditions from the custom BLEAdvertisementData path.
+    pAdv->addServiceUUID(BLE_SERVICE_UUID);
+    BLEDevice::startAdvertising();
 
 #if FEATURE_BLE_PEERS
     _scan = BLEDevice::getScan();
     if (_scan) {
       _scan->setAdvertisedDeviceCallbacks(new PeerScanCB(this), true);
-      _scan->setActiveScan(true);
-      _scan->setInterval(160);
-      _scan->setWindow(80);
+      _scan->setActiveScan(true);   // active scan: sends SCAN_REQ, gets full name + mfr data
+      _scan->setInterval(100);
+      _scan->setWindow(90);         // 90% duty cycle — wide window for better coverage
     }
+    // Stagger first scan so two powered-on devices don't scan simultaneously.
+    _lastPeerScanMs = millis() + (_deviceId & 0xFF);
+    Serial.printf("[BLE] init done — device %s  id=0x%04X\n", _advertisedName, _deviceId);
+    // NOTE: do NOT call refreshAdvertising() here — BLEDevice::startAdvertising()
+    // runs an async chain (adv data config → scan resp config → start). Calling
+    // esp_ble_gap_config_adv_data_raw() before that chain completes races with it
+    // and can leave advertising silently broken. The standard adv packet already
+    // contains the device name (in scan response) which is enough for detection.
 #endif
   }
 
@@ -264,12 +277,13 @@ public:
     if (_peerOutgoing.valid && _peerOutgoingUntilMs && now > _peerOutgoingUntilMs) {
       _peerOutgoing = BLEPeerMessage{};
       _peerOutgoingUntilMs = 0;
-      refreshAdvertising();
+      refreshAdvertising();  // reverts beacon back to presence-only
     }
     // Async scan (non-blocking) — onResult fires per-device via PeerScanCB
     if (_scan && (now - _lastPeerScanMs) > BLE_PEER_SCAN_INTERVAL_MS) {
       _lastPeerScanMs = now;
       _scan->clearResults();
+      Serial.printf("[BLE] scan start (peer=%s)\n", peer.visible ? peer.name : "none");
       _scan->start(BLE_PEER_SCAN_DURATION_S, _onScanDone, false);
     }
 #endif
@@ -340,7 +354,6 @@ private:
   BLEAdvertising* _advertising    = nullptr;
   BLEScan*        _scan           = nullptr;
   unsigned long   _lastPeerScanMs     = 0;
-  unsigned long   _scanningUntilMs    = 0;
   unsigned long   _peerOutgoingUntilMs = 0;
   uint16_t        _deviceId       = 0;
   uint8_t         _peerSeq        = 0;
@@ -360,6 +373,38 @@ private:
   // No-op callback for async scan — results handled per-device via PeerScanCB::onResult
   static void _onScanDone(BLEScanResults) {}
 
+  static int hexNibble(char ch) {
+    if (ch >= '0' && ch <= '9') return ch - '0';
+    if (ch >= 'A' && ch <= 'F') return 10 + (ch - 'A');
+    if (ch >= 'a' && ch <= 'f') return 10 + (ch - 'a');
+    return -1;
+  }
+
+  static bool parseHexByte(const char* src, uint8_t* out) {
+    if (!src || !out) return false;
+    const int hi = hexNibble(src[0]);
+    const int lo = hexNibble(src[1]);
+    if (hi < 0 || lo < 0) return false;
+    *out = static_cast<uint8_t>((hi << 4) | lo);
+    return true;
+  }
+
+  static bool parseHexWord(const char* src, uint16_t* out) {
+    uint8_t hi = 0;
+    uint8_t lo = 0;
+    if (!src || !out) return false;
+    if (!parseHexByte(src, &hi) || !parseHexByte(src + 2, &lo)) return false;
+    *out = static_cast<uint16_t>((hi << 8) | lo);
+    return true;
+  }
+
+  // Minimal presence beacon in ASCII to avoid String/binary truncation issues.
+  String buildPresenceBeacon() const {
+    char buf[12];
+    snprintf(buf, sizeof(buf), "SB%04X", _deviceId);
+    return String(buf);
+  }
+
   static bool startsWith(const char* text, const char* prefix) {
     if (!text || !prefix) return false;
     const size_t prefixLen = strlen(prefix);
@@ -368,7 +413,10 @@ private:
 
   void buildAdvertisedName(const char* preferredName) {
     (void)preferredName;
-    const unsigned int suffix = (unsigned int)(ESP.getEfuseMac() & 0xFFFF);
+    const uint64_t mac = ESP.getEfuseMac();
+    // bytes 0-1 are the OUI (identical across same-manufacturer devices);
+    // bytes 4-5 (bits 32-47) are the device-unique NIC portion of the MAC.
+    const unsigned int suffix = (unsigned int)((mac >> 32) & 0xFFFF);
     _deviceId = (uint16_t)suffix;
     snprintf(_advertisedName, sizeof(_advertisedName), "%s-%04X", BLE_DEVICE_NAME_PREFIX, suffix);
   }
@@ -400,70 +448,53 @@ private:
     char fixedText[BLE_PEER_MESSAGE_MAX_TEXT + 1];
     sanitizePeerText(_peerOutgoing.text, fixedText, sizeof(fixedText));
 
-    std::string payload;
-    payload.reserve(10 + BLE_PEER_MESSAGE_MAX_TEXT);
-    payload.push_back(static_cast<char>(PEER_COMPANY_ID_LO));
-    payload.push_back(static_cast<char>(PEER_COMPANY_ID_HI));
-    payload.push_back(static_cast<char>(PEER_MAGIC_0));
-    payload.push_back(static_cast<char>(PEER_MAGIC_1));
-    payload.push_back(static_cast<char>(PEER_VERSION));
-    payload.push_back(static_cast<char>(_deviceId & 0xFF));
-    payload.push_back(static_cast<char>((_deviceId >> 8) & 0xFF));
-    payload.push_back(static_cast<char>(_peerOutgoing.seq));
-    payload.push_back(static_cast<char>(_peerOutgoing.replyTo));
-    payload.push_back(static_cast<char>(_peerOutgoing.isReply ? PEER_KIND_REPLY : PEER_KIND_SAY));
-    for (size_t i = 0; i < BLE_PEER_MESSAGE_MAX_TEXT; ++i) {
-      payload.push_back(fixedText[i] ? fixedText[i] : '\0');
-    }
-    return String(payload.c_str(), payload.size());
+    char payload[40];
+    snprintf(payload, sizeof(payload), "SB%04X%02X%02X%c%s",
+             _deviceId,
+             _peerOutgoing.seq,
+             _peerOutgoing.replyTo,
+             _peerOutgoing.isReply ? 'R' : 'S',
+             fixedText);
+    return String(payload);
   }
 
   static bool decodePeerPayload(const String& raw, BLEPeerMessage* out) {
     if (!out) return false;
     *out = BLEPeerMessage{};
-    if ((size_t)raw.length() < (10 + BLE_PEER_MESSAGE_MAX_TEXT)) return false;
+    const char* text = raw.c_str();
+    if (raw.length() < 11) return false;
+    if (text[0] != 'S' || text[1] != 'B') return false;
+    if (!parseHexWord(text + 2, &out->senderId)) return false;
+    if (!parseHexByte(text + 6, &out->seq)) return false;
+    if (!parseHexByte(text + 8, &out->replyTo)) return false;
+    if (text[10] != 'S' && text[10] != 'R') return false;
 
-    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(raw.c_str());
-    if (bytes[0] != PEER_COMPANY_ID_LO || bytes[1] != PEER_COMPANY_ID_HI) return false;
-    if (bytes[2] != PEER_MAGIC_0 || bytes[3] != PEER_MAGIC_1) return false;
-    if (bytes[4] != PEER_VERSION) return false;
-
-    out->senderId = static_cast<uint16_t>(bytes[5] | (bytes[6] << 8));
-    out->seq = bytes[7];
-    out->replyTo = bytes[8];
-    out->isReply = (bytes[9] == PEER_KIND_REPLY);
-
-    size_t textIdx = 0;
-    for (size_t i = 10; i < (size_t)raw.length() && textIdx < BLE_PEER_MESSAGE_MAX_TEXT; ++i) {
-      const char ch = raw[i];
-      if (ch == '\0') break;
-      if (static_cast<unsigned char>(ch) < 32 || static_cast<unsigned char>(ch) > 126) continue;
-      out->text[textIdx++] = ch;
-    }
-    out->text[textIdx] = '\0';
-    out->valid = textIdx > 0;
+    out->isReply = (text[10] == 'R');
+    sanitizePeerText(text + 11, out->text, sizeof(out->text));
+    out->valid = out->text[0] != '\0';
     return out->valid;
   }
 
+  // Update advertising payload in-place using the raw Bluedroid API.
+  // This avoids the stop→setData→start race condition where ADV_STOP_COMPLETE_EVT
+  // can restart advertising with stale data before the new data is configured.
+  // esp_ble_gap_config_adv_data_raw() is safe to call while advertising is running;
+  // the controller uses the new payload on the next advertising event.
   void refreshAdvertising() {
-    if (!_advertising) return;
+    const bool hasMsg = _peerOutgoing.valid && _peerOutgoing.text[0];
+    const String payload = hasMsg ? buildPeerPayload() : buildPresenceBeacon();
 
-    // Put name in primary ad packet (always broadcast, no scan request needed)
-    BLEAdvertisementData advData;
-    advData.setFlags(0x06);
-    advData.setName(_advertisedName);
-    if (_peerOutgoing.valid && _peerOutgoing.text[0]) {
-      advData.setManufacturerData(buildPeerPayload());
-    }
-
-    // Service UUID in scan response
-    BLEAdvertisementData scanData;
-    scanData.setCompleteServices(BLEUUID(BLE_SERVICE_UUID));
-
-    _advertising->stop();
-    _advertising->setAdvertisementData(advData);
-    _advertising->setScanResponseData(scanData);
-    _advertising->start();
+    // Build raw AD bytes: Flags (3B) + Manufacturer Specific (2+N B)
+    uint8_t buf[31];
+    uint8_t i = 0;
+    buf[i++] = 0x02; buf[i++] = 0x01; buf[i++] = 0x06;  // Flags: LE General Discoverable
+    const uint8_t dlen = (uint8_t)payload.length();
+    buf[i++] = (uint8_t)(dlen + 1);  // length field includes type byte
+    buf[i++] = 0xFF;                 // AD type: Manufacturer Specific
+    for (uint8_t j = 0; j < dlen && i < 31; j++) buf[i++] = (uint8_t)payload[j];
+#ifdef CONFIG_BLUEDROID_ENABLED
+    esp_ble_gap_config_adv_data_raw(buf, i);
+#endif
   }
 
   void rememberIncomingMessage(const BLEPeerMessage& msg) {
@@ -484,26 +515,52 @@ private:
   }
 
   void rememberPeer(BLEAdvertisedDevice& advertisedDevice) {
+    // ── Manufacturer data path (message exchange) ──────────────────
     if (advertisedDevice.haveManufacturerData()) {
-      BLEPeerMessage incoming;
-      if (decodePeerPayload(advertisedDevice.getManufacturerData(), &incoming)) {
-        rememberIncomingMessage(incoming);
+      const String& mfr = advertisedDevice.getManufacturerData();
+      uint16_t sid = 0;
+      if (mfr.length() >= 6 && mfr[0] == 'S' && mfr[1] == 'B' &&
+          parseHexWord(mfr.c_str() + 2, &sid) && sid != _deviceId) {
+        if (peer.senderId != sid) {
+          peer.senderId = sid;
+          peer.name[0] = '\0';
+          snprintf(peer.name, sizeof(peer.name), "%s-%04X", BLE_DEVICE_NAME_PREFIX, sid);
+        }
+        peer.rssi = advertisedDevice.getRSSI();
+        peer.lastSeenMs = millis();
+        peer.visible = true;
+        Serial.printf("[BLE] peer via mfr: %s rssi=%d\n", peer.name, peer.rssi);
+        BLEPeerMessage incoming;
+        if (decodePeerPayload(mfr, &incoming)) {
+          rememberIncomingMessage(incoming);
+        }
+        return;
       }
     }
 
+    // ── Name-based detection (primary presence via scan response) ──
+    // Active scan sends SCAN_REQ; advertiser responds with SCAN_RSP
+    // containing the device name set at BLEDevice::init() time.
     if (!advertisedDevice.haveName()) return;
+    const String peerNameStr = advertisedDevice.getName();
+    if (!peerNameStr.length()) return;
+    const char* foundName = peerNameStr.c_str();
+    if (strcmp(foundName, _advertisedName) == 0) return;   // skip self
+    if (!startsWith(foundName, BLE_DEVICE_NAME_PREFIX)) return;  // must be a Sablina
 
-    String peerNameValue = advertisedDevice.getName();
-    if (!peerNameValue.length()) return;
-
-    char foundName[sizeof(peer.name)];
-    strlcpy(foundName, peerNameValue.c_str(), sizeof(foundName));
-    if (strcmp(foundName, _advertisedName) == 0) return;
-    if (!startsWith(foundName, BLE_DEVICE_NAME_PREFIX)) return;
-
+    // Extract 4-hex device ID from suffix (e.g. "Sablina-4518" → 0x4518)
+    const size_t prefixDashLen = strlen(BLE_DEVICE_NAME_PREFIX) + 1;  // "Sablina-"
+    uint16_t extractedId = 0;
+    if (strlen(foundName) >= prefixDashLen + 4) {
+      parseHexWord(foundName + prefixDashLen, &extractedId);
+    }
+    if (extractedId != 0 && extractedId != _deviceId) {
+      peer.senderId = extractedId;
+    }
     strlcpy(peer.name, foundName, sizeof(peer.name));
     peer.rssi = advertisedDevice.getRSSI();
     peer.lastSeenMs = millis();
     peer.visible = true;
+    Serial.printf("[BLE] peer via name: %s rssi=%d\n", peer.name, peer.rssi);
   }
 };
