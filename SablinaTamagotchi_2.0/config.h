@@ -201,6 +201,27 @@ const int BRIGHT_LEVELS[] = {120, 260, 420, 620, 820, 1023};
 #define NVS_TG_OWU_MODEL     "tg_owu_model"
 #define NVS_TG_OFFSET        "tg_offset"
 
+// ── Platform Canvas integration ───────────────────────────────────
+#define NVS_PLATFORM_URL     "plt_url"    // Canvas server base URL e.g. https://canvas.host
+#define NVS_PLATFORM_KEY     "plt_key"    // API key from /api/auth/apikey
+
+// ── Trait Evolution ──────────────────────────────────────────────────
+#define NVS_TRAIT_CURIOSITY  "tr_curio"   // uint8 0-100
+#define NVS_TRAIT_ACTIVITY   "tr_activ"   // uint8 0-100
+#define NVS_TRAIT_STRESS     "tr_stress"  // uint8 0-100
+
+// ── Day/Night ────────────────────────────────────────────────────────
+// NTP pool for time sync
+#define NTP_SERVER1          "pool.ntp.org"
+#define NTP_SERVER2          "time.nist.gov"
+// Hour range considered "night" (24-hour clock)
+#define NIGHT_HOUR_START     22   // 10 PM
+#define NIGHT_HOUR_END       7    // 7 AM
+// Dim level during night (index into BRIGHT_LEVELS[])
+#define BL_NIGHT_IDX         1
+// Dark-mode dim level (index into BRIGHT_LEVELS[])
+#define BL_DARKMODE_IDX      1
+
 // ── WiFi Security Audit ───────────────────────────────────────────
 #define FEATURE_WIFI_AUDIT   1   // enable WiFi pentesting module
 // Channel hop interval (ms) during scanning

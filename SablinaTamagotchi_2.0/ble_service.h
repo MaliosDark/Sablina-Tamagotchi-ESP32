@@ -107,6 +107,18 @@ public:
         g_llm.setModel(doc["llm_model"]);
       if (doc["offline_force"].is<bool>())
         g_llm.setForceOffline(doc["offline_force"]);
+      // Platform Canvas credentials
+      extern char g_platformUrl[];
+      extern char g_platformKey[];
+      extern Preferences g_prefs;
+      if (doc["platform_url"].is<const char*>()) {
+        strlcpy(g_platformUrl, doc["platform_url"], 128);
+        g_prefs.putString(NVS_PLATFORM_URL, g_platformUrl);
+      }
+      if (doc["platform_key"].is<const char*>()) {
+        strlcpy(g_platformKey, doc["platform_key"], 64);
+        g_prefs.putString(NVS_PLATFORM_KEY, g_platformKey);
+      }
     }
   };
 

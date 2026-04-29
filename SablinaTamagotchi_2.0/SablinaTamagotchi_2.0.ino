@@ -187,10 +187,16 @@ TelegramBot       g_tg;
 char          g_wifiSSID[64] = WIFI_SSID_DEFAULT;
 char          g_wifiPass[64] = WIFI_PASS_DEFAULT;
 bool          g_wifiChanged  = false;
+char          g_platformUrl[128] = "";  // Canvas server base URL (set via BLE)
+char          g_platformKey[64]  = "";  // Canvas API key (set via BLE)
+unsigned long g_lastHeartbeatMs  = 0;   // last successful heartbeat timestamp
 bool          g_wifiEnabled  = false;
 unsigned long g_lastBleNotify       = 0;
 unsigned long g_lastSidebarDraw     = 0;
 unsigned long g_lastRgbUpdate       = 0;
+uint32_t      g_rgbEventColor       = 0;  // temporary flash color (0 = none)
+unsigned long g_rgbEventUntilMs     = 0;  // expiry timestamp for flash color
+bool          g_rgbPulsePhase       = false;  // toggled for blinking effects
 unsigned long g_iconsLastInteractMs = 0;  // for 15-second icon auto-hide
 bool          g_iconsShown         = true;   // track icon visibility for transition detection
 char          g_popupText[192]   = "";
@@ -213,6 +219,13 @@ unsigned long g_lastAutoRoomMs   = 0;
 bool          g_navActive        = false;  // true while autonomous walk/action is in progress
 bool          g_idleFirstFrame   = true;   // clear once when entering idle
 bool          g_idleFrameDrawn   = false;  // set by maingif each new frame; bubble redraws on top
+
+// ── WiFi passive scan (autonomous) ───────────────────────────────
+unsigned long g_lastWifiScanMs   = 0;      // last time async WiFi scan was started
+bool          g_wifiScanPending  = false;  // async scan in progress
+
+// ── Stat-based autonomous navigation (independent of LLM) ────────
+unsigned long g_lastStatNavMs    = 0;      // last stat-nav decision tick
 
 // ── Life-cycle state ──────────────────────────────────────────────
 // Stages: 0=BABY 1=CHILD 2=TEEN 3=ADULT 4=ELDER
@@ -242,6 +255,34 @@ struct LifetimeStats {
 };
 LifetimeStats g_lifetime;
 
+// ── Trait Evolution ──────────────────────────────────────────────────
+// curiosity  0-100 : rises when WiFi/BLE events happen, decays slowly
+// activity   0-100 : rises when pet moves/plays, decays toward 50
+// stress     0-100 : rises when stats are critical, decays when cared for
+struct PetTraits {
+  uint8_t curiosity = 50;
+  uint8_t activity  = 50;
+  uint8_t stress    = 20;
+};
+PetTraits g_traits;
+unsigned long g_lastTraitTickMs = 0;  // last trait evolution tick (every 60 s)
+
+// ── Day/Night cycle ───────────────────────────────────────────────
+int8_t g_currentHour   = -1;   // 0-23; -1 = not synced yet
+bool   g_isNight       = false; // true between NIGHT_HOUR_START and NIGHT_HOUR_END
+bool   g_ntpSynced     = false; // true after first successful NTP sync
+bool   g_blNightDimmed = false; // backlight was dimmed by night logic
+
+// ── Dark mode ──────────────────────────────────────────────────────
+// darkmode bool already declared below; g_darkModeActive mirrors it for
+// the new auto-dim logic to avoid changing the existing menu code.
+// True = reduce BL + use dimmed sidebar colours.
+bool g_darkModeActive = false;  // set by night logic and existing dark-mode menu
+
+// ── Trait evolution event flags (set by game events, read in tickTraitEvolution) ──
+bool s_traitNavFlag  = false;  // pet navigated to a room this cycle → activity +
+bool s_traitScanFlag = false;  // WiFi scan found networks → curiosity +
+
 struct SocialPeerMemory {
   uint16_t senderId      = 0;
   uint16_t encounters    = 0;
@@ -262,6 +303,7 @@ void handleBleCmdIfAny();
 void updateRgbMood();
 void triggerFloatingMessage(const char* text, unsigned long nowMs);
 void triggerPeerConversation(const char* localText, const char* peerName, const char* peerText, unsigned long nowMs);
+void triggerRgbEvent(uint8_t r, uint8_t g, uint8_t b, unsigned long durationMs);
 void drawFloatingMessage(unsigned long nowMs);
 void maybeBlePeerExchange(unsigned long nowMs);
 void choosePeerOfferText(bool justDetected, char* out, size_t outLen);
@@ -280,6 +322,10 @@ void applyGiftReward(const char* giftKind);
 void trimChatLine(const char* src, char* dst, size_t dstLen, size_t maxChars);
 void processSoundNotifications(unsigned long nowMs);
 void processVibrationNotifications(unsigned long nowMs);
+void sendPlatformHeartbeat(unsigned long nowMs,
+                           const char* socialEvent = nullptr,
+                           const char* socialMsg   = nullptr,
+                           const char* targetAlias = nullptr);
 void updateTargetRoomFromText(const char* text);
 void autoNavigateToTargetRoom(unsigned long nowMs);
 const char* decideNextTargetRoomFromNeeds();
@@ -291,6 +337,10 @@ void autoPerformKitchenAction();
 void autoPerformBedroomAction();
 void autoPerformBathroomAction();
 void autoPerformPlayroomAction();
+void tickTraitEvolution(unsigned long nowMs);
+void tickDayNight(unsigned long nowMs);
+void applyDarkMode(bool enable);
+void runMiniGame(unsigned long nowMs);
 
 // ── Virtual single-button state machine ─────────────────────────────────────
 // Hardware reality: only GPIO0 (BOOT) is a real button.  RST = hardware EN.
@@ -508,6 +558,21 @@ void Generalmenu()
     
       tft.drawString("Sablina coins", 9, 99, 2);
       tft.drawString(String(Exp), 94, 99, 2);
+
+      // Trait evolution display
+      tft.setTextColor(TFT_CYAN, TFT_BLACK);
+      tft.drawString("Curiosity", 9, 122, 1);
+      tft.drawString(String(g_traits.curiosity), 90, 122, 1);
+      tft.drawString("Activity ", 9, 134, 1);
+      tft.drawString(String(g_traits.activity),  90, 134, 1);
+      tft.drawString("Stress   ", 9, 146, 1);
+      tft.drawString(String(g_traits.stress),    90, 146, 1);
+      // Night / dark-mode status
+      if (g_isNight) {
+        tft.setTextColor(TFT_MAGENTA, TFT_BLACK);
+        tft.drawString("[ Night Mode ]", 9, 158, 1);
+      }
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
     }
     delay(300);
     mainicon();
@@ -535,6 +600,10 @@ static void persistLifetime() {
   g_prefs.putUInt(NVS_LT_COINS_S, g_lifetime.coinsSpent);
   g_prefs.putUInt(NVS_LT_SCANS,   g_lifetime.wifiScans);
   g_prefs.putUInt(NVS_LT_NETS,    g_lifetime.maxNets);
+  // Save traits alongside lifetime stats
+  g_prefs.putUInt(NVS_TRAIT_CURIOSITY, g_traits.curiosity);
+  g_prefs.putUInt(NVS_TRAIT_ACTIVITY,  g_traits.activity);
+  g_prefs.putUInt(NVS_TRAIT_STRESS,    g_traits.stress);
 }
 
 static uint8_t computeStage(uint32_t ageH, int avgStat) {
@@ -574,6 +643,7 @@ void updateLifecycle(unsigned long nowMs) {
       if (g_sickStartMs == 0) g_sickStartMs = nowMs;
       if (nowMs - g_sickStartMs > 300000UL) {  // 5 minutes
         g_petSick = true;
+        triggerRgbEvent(255, 0, 0, 4000);  // red flash: pet is sick!
         const char* name = g_llm.traits.name[0] ? g_llm.traits.name : "Sablina";
         char msg[100];
         snprintf(msg, sizeof(msg), "\xF0\x9F\xA4\x92 %s is SICK! Give her medicine!", name);
@@ -585,6 +655,7 @@ void updateLifecycle(unsigned long nowMs) {
   } else if (Cle >= 50) {
     g_sickStartMs = 0;
     g_petSick = false;
+    triggerRgbEvent(0, 255, 120, 2000);  // green flash: healed!
   }
 
   // ── Death check (any critical stat <= 5 for > 5 min) ─────────
@@ -4726,12 +4797,12 @@ void Time()
   
           else if(readBtnA() == 0 && modey1 == 23)
           {
-            darkmode = 0;
+            applyDarkMode(false);
           }
   
           else if(readBtnA() == 0 && modey1 == 48)
           {
-            darkmode = 1;
+            applyDarkMode(true);
           }
         }
         delay(300);
@@ -5379,6 +5450,8 @@ void setup()
   g_prefs.begin(NVS_NS, false);
   strlcpy(g_wifiSSID, g_prefs.getString(NVS_WIFI_SSID, WIFI_SSID_DEFAULT).c_str(), sizeof(g_wifiSSID));
   strlcpy(g_wifiPass, g_prefs.getString(NVS_WIFI_PASS, WIFI_PASS_DEFAULT).c_str(), sizeof(g_wifiPass));
+  strlcpy(g_platformUrl, g_prefs.getString(NVS_PLATFORM_URL, "").c_str(), sizeof(g_platformUrl));
+  strlcpy(g_platformKey, g_prefs.getString(NVS_PLATFORM_KEY, "").c_str(), sizeof(g_platformKey));
   // Restore stat offsets
   Hun_mas = g_prefs.getInt(NVS_HUN_MAS, 0);
   Fat_mas = g_prefs.getInt(NVS_FAT_MAS, 0);
@@ -5402,6 +5475,10 @@ void setup()
   g_lifetime.coinsSpent  = g_prefs.getUInt(NVS_LT_COINS_S, 0);
   g_lifetime.wifiScans   = g_prefs.getUInt(NVS_LT_SCANS,   0);
   g_lifetime.maxNets     = g_prefs.getUInt(NVS_LT_NETS,    0);
+  // Restore trait evolution
+  g_traits.curiosity = (uint8_t)g_prefs.getUInt(NVS_TRAIT_CURIOSITY, 50);
+  g_traits.activity  = (uint8_t)g_prefs.getUInt(NVS_TRAIT_ACTIVITY,  50);
+  g_traits.stress    = (uint8_t)g_prefs.getUInt(NVS_TRAIT_STRESS,    20);
   g_lastAgeTickMs        = millis();
   g_iconsLastInteractMs  = millis();  // start with icons visible
   loadSocialMemory();
@@ -5456,6 +5533,8 @@ void setup()
     WiFi.mode(WIFI_STA);
     WiFi.begin(g_wifiSSID, g_wifiPass);
     // Non-blocking: just fire off the connect request; loop() checks status
+    // Also request NTP config now; actual sync happens once connected.
+    configTime(0, 0, NTP_SERVER1, NTP_SERVER2);
   }
 
   // ── Game init ──────────────────────────────────────────────────
@@ -5519,6 +5598,12 @@ void loop()
 
   // ── Life-cycle (stage, sickness, death) ──────────────────────────
   updateLifecycle(now);
+
+  // ── Day/Night cycle tick (NTP sync + auto-dim) ───────────────────
+  tickDayNight(now);
+
+  // ── Trait evolution tick (every 60 s) ────────────────────────────
+  tickTraitEvolution(now);
 
   // ── Icon auto-hide: detect visible↔hidden transitions ───────────────
   bool iconsActive = (now - g_iconsLastInteractMs < 15000UL);
@@ -5680,13 +5765,71 @@ void loop()
   }
 
   // ── RGB mood LED ─────────────────────────────────────────────────
-  if (now - g_lastRgbUpdate > 2000) {
+  if (now - g_lastRgbUpdate > 400) {    // update every 400 ms for smooth effects
     g_lastRgbUpdate = now;
+    g_rgbPulsePhase = !g_rgbPulsePhase;
     updateRgbMood();
   }
 
   processSoundNotifications(now);
   processVibrationNotifications(now);
+
+  // ── Platform Canvas heartbeat (every 60 s when credentials are set) ───────────
+  if (g_platformUrl[0] && g_platformKey[0]
+      && WiFi.status() == WL_CONNECTED
+      && (now - g_lastHeartbeatMs) > 60000UL) {
+    g_lastHeartbeatMs = now;
+    sendPlatformHeartbeat(now);
+  }
+
+  // ── WiFi passive background scan (every 90 s) ─────────────────────────────────────────
+  // Async (non-blocking) scan. Coins awarded proportional to nets found.
+  // Does NOT interfere with WiFi STA connection (WIFI_STA+AP mode not needed;
+  // scanNetworks(async=true) works transparently alongside an existing STA link).
+  if (!g_navActive && !g_wifiScanPending && (now - g_lastWifiScanMs) > 90000UL) {
+    g_lastWifiScanMs  = now;
+    g_wifiScanPending = true;
+    WiFi.scanNetworks(/*async=*/true);  // returns immediately; result ready via WIFI_SCAN_DONE
+  }
+  if (g_wifiScanPending) {
+    int16_t n = WiFi.scanComplete();
+    if (n >= 0) {  // scan done
+      g_wifiScanPending = false;
+      g_lifetime.wifiScans++;
+      if ((uint32_t)n > g_lifetime.maxNets) g_lifetime.maxNets = (uint32_t)n;
+      persistLifetime();
+      WiFi.scanDelete();
+      if (n > 0) {
+        s_traitScanFlag = true;   // curiosity boost: saw networks
+        triggerRgbEvent(200, 200, 255, 1500); // ice-blue flash: WiFi found
+        // Award coins: +1 per 3 networks found (max +5 per scan)
+        int bonus = min((int)(n / 3), 5);
+        if (bonus > 0) { Exp_mas += bonus; g_prefs.putInt(NVS_EXP_MAS, Exp_mas); }
+        char msg[48];
+        snprintf(msg, sizeof(msg), "Found %d networks! +%d coins", n, bonus);
+        triggerFloatingMessage(msg, now);
+      }
+    }
+  }
+
+  // ── Stat-based autonomous navigation (every 45 s, independent of LLM) ───────────
+  // Makes the pet act on its own needs even when WiFi/LLM are unavailable.
+  // Thresholds: critical <25 (immediate), low <45 (gentle nudge).
+  if (!g_navActive && (now - g_lastStatNavMs) > 45000UL) {
+    g_lastStatNavMs = now;
+    state_count();
+    const char* needed = "LIVING";
+    if      (Hun < 25)                    needed = "KITCHEN";
+    else if (Cle < 25)                    needed = "BATHROOM";
+    else if (Fat < 25)                    needed = "BEDROOM";
+    else if (Hun < 45 && strcmp(g_targetRoom, "KITCHEN")  != 0) needed = "KITCHEN";
+    else if (Cle < 45 && strcmp(g_targetRoom, "BATHROOM") != 0) needed = "BATHROOM";
+    else if (Fat < 45 && strcmp(g_targetRoom, "BEDROOM")  != 0) needed = "BEDROOM";
+    if (strcmp(needed, "LIVING") != 0 && strcmp(needed, g_targetRoom) != 0) {
+      strlcpy(g_targetRoom, needed, sizeof(g_targetRoom));
+      autoNavigateToTargetRoom(now);
+    }
+  }
 
   // ── Idle animation: drawn last so navigation/actions always finish first ──
   maingif();
@@ -5897,6 +6040,7 @@ void notePeerEncounter(uint16_t senderId, const char* peerName, bool justDetecte
     peer->encounters = peer->encounters < 9999 ? peer->encounters + 1 : 9999;
     peer->affinity = peer->affinity <= 98 ? peer->affinity + 2 : 100;
     saveSocialMemory();
+    triggerRgbEvent(0, 220, 255, 2000);  // cyan flash: BLE peer spotted!
   }
 }
 
@@ -5948,6 +6092,85 @@ void applyGiftReward(const char* giftKind) {
   }
 }
 
+// ── Platform Canvas heartbeat ─────────────────────────────────────────────────
+// Maps internal room names to the world zones defined in DEFAULT_ZONES (world.js)
+static void _roomToWorldZone(const char* room,
+                              const char** zoneId, float* wx, float* wy) {
+  if      (strcmp(room, "KITCHEN")  == 0) { *zoneId = "market";   *wx =  18; *wy =   4; }
+  else if (strcmp(room, "BATHROOM") == 0) { *zoneId = "garden";   *wx = -16; *wy =  10; }
+  else if (strcmp(room, "BEDROOM")  == 0) { *zoneId = "lake";     *wx =   6; *wy =  18; }
+  else if (strcmp(room, "PLAYROOM") == 0) { *zoneId = "mountain"; *wx = -20; *wy = -12; }
+  else                                     { *zoneId = "plaza";    *wx =   0; *wy =   0; }
+}
+
+// sendPlatformHeartbeat() — fire-and-forget HTTPS POST to /api/device/heartbeat.
+//   socialEvent : one of "wave"|"gift"|"dance"|"party"|"visit"|nullptr (periodic only)
+//   socialMsg   : free-text to attach to the event (may be nullptr)
+//   targetAlias : peer name to show in event feed (may be nullptr)
+void sendPlatformHeartbeat(unsigned long /*nowMs*/,
+                           const char* socialEvent,
+                           const char* socialMsg,
+                           const char* targetAlias) {
+  if (!g_platformUrl[0] || !g_platformKey[0]) return;
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  const char* zoneId; float wx, wy;
+  _roomToWorldZone(g_targetRoom, &zoneId, &wx, &wy);
+
+  // Build compact JSON body (no ArduinoJson heap needed — stats are just ints)
+  char body[320];
+  if (socialEvent && socialEvent[0]) {
+    snprintf(body, sizeof(body),
+      "{\"hunger\":%d,\"fatigue\":%d,\"cleanliness\":%d,\"experience\":%d,"
+      "\"stage\":%d,\"alive\":%s,\"sick\":%s,"
+      "\"world_x\":%.1f,\"world_y\":%.1f,\"world_zone\":\"%s\","
+      "\"social_event\":\"%s\",\"social_message\":\"%s\",\"target_alias\":\"%s\"}",
+      Hun, Fat, Cle, Exp_mas, (int)g_petStage,
+      g_petAlive ? "true" : "false", g_petSick ? "true" : "false",
+      wx, wy, zoneId,
+      socialEvent,
+      socialMsg   ? socialMsg   : "",
+      targetAlias ? targetAlias : "");
+  } else {
+    snprintf(body, sizeof(body),
+      "{\"hunger\":%d,\"fatigue\":%d,\"cleanliness\":%d,\"experience\":%d,"
+      "\"stage\":%d,\"alive\":%s,\"sick\":%s,"
+      "\"world_x\":%.1f,\"world_y\":%.1f,\"world_zone\":\"%s\"}",
+      Hun, Fat, Cle, Exp_mas, (int)g_petStage,
+      g_petAlive ? "true" : "false", g_petSick ? "true" : "false",
+      wx, wy, zoneId);
+  }
+
+  // Parse host from URL (same pattern used by LLM personality engine)
+  String url = String(g_platformUrl);
+  bool useTLS = url.startsWith("https://");
+  String hostpart = url.substring(useTLS ? 8 : 7);
+  int slash = hostpart.indexOf('/');
+  String host = (slash < 0) ? hostpart : hostpart.substring(0, slash);
+
+  WiFiClientSecure client;
+  client.setInsecure();   // self-signed / LetsEncrypt — acceptable for hobby device
+  client.setTimeout(8);   // 8-second connect timeout
+
+  if (!client.connect(host.c_str(), useTLS ? 443 : 80)) return;
+
+  String req =
+    String("POST /api/device/heartbeat HTTP/1.1\r\n") +
+    "Host: " + host + "\r\n" +
+    "X-Api-Key: " + g_platformKey + "\r\n" +
+    "Content-Type: application/json\r\n" +
+    "Content-Length: " + strlen(body) + "\r\n" +
+    "Connection: close\r\n\r\n" + body;
+
+  client.print(req);
+  // Drain a few bytes so the server registers the full request, then close
+  unsigned long t0 = millis();
+  while (client.connected() && millis() - t0 < 4000UL) {
+    if (client.available()) { client.read(); break; }
+  }
+  client.stop();
+}
+
 void triggerFloatingMessage(const char* text, unsigned long nowMs) {
   if (!text || !text[0]) return;
   strlcpy(g_popupText, text, sizeof(g_popupText));
@@ -5958,6 +6181,266 @@ void triggerFloatingMessage(const char* text, unsigned long nowMs) {
   g_pendingBeeps = SOUND_NOTIFY_BEEPS;
   g_pendingVibes = VIBRO_NOTIFY_PULSES;
   g_lastBeepMs = 0;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DARK MODE
+// ═══════════════════════════════════════════════════════════════════
+void applyDarkMode(bool enable) {
+  g_darkModeActive = enable;
+  darkmode = enable ? 1 : 0;  // keep legacy variable in sync
+  if (enable) {
+    applyBacklightRaw(bright[BL_DARKMODE_IDX]);
+  } else {
+    // Restore user-chosen brightness unless night logic already dimmed it
+    if (!g_blNightDimmed) {
+      applyBacklightRaw(bright[b]);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  DAY / NIGHT CYCLE
+// ═══════════════════════════════════════════════════════════════════
+void tickDayNight(unsigned long nowMs) {
+  // Only active once WiFi is up and NTP has had a chance to sync.
+  // Poll NTP at most every 30 minutes.
+  static unsigned long lastNtpCheckMs = 0;
+  if (!g_wifiEnabled) return;
+
+  if (!g_ntpSynced || (nowMs - lastNtpCheckMs) > 1800000UL) {
+    lastNtpCheckMs = nowMs;
+    struct tm ti;
+    if (getLocalTime(&ti, 500)) {
+      g_ntpSynced    = true;
+      g_currentHour  = (int8_t)ti.tm_hour;
+    }
+  }
+
+  if (!g_ntpSynced) return;
+
+  // Determine night: hour >= NIGHT_HOUR_START OR hour < NIGHT_HOUR_END
+  bool isNight = (g_currentHour >= NIGHT_HOUR_START || g_currentHour < NIGHT_HOUR_END);
+
+  if (isNight == g_isNight) return;   // no change
+  g_isNight = isNight;
+
+  if (isNight) {
+    // Auto-sleep only if pet is not already resting
+    if (Fat < 70) {
+      strlcpy(g_targetRoom, "BEDROOM", sizeof(g_targetRoom));
+      autoNavigateToTargetRoom(nowMs);
+    }
+    // Dim backlight unless user manually set dark mode already
+    if (!g_darkModeActive) {
+      g_blNightDimmed = true;
+      applyBacklightRaw(bright[BL_NIGHT_IDX]);
+    }
+    triggerRgbEvent(30, 0, 80, 3000);   // deep indigo flash: entering night
+    char msg[64];
+    snprintf(msg, sizeof(msg), "It's night... time to rest~");
+    triggerFloatingMessage(msg, nowMs);
+  } else {
+    // Restore daytime brightness
+    if (g_blNightDimmed && !g_darkModeActive) {
+      g_blNightDimmed = false;
+      applyBacklightRaw(bright[b]);
+    }
+    triggerFloatingMessage("Good morning! Let's go!", nowMs);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  TRAIT EVOLUTION
+// ═══════════════════════════════════════════════════════════════════
+// Rules (each fires once per 60-second tick):
+//   curiosity  +3 if wifi_scan happened or BLE peer visible, -1 otherwise, clamp 0-100
+//   activity   +3 if navigated to any room this cycle, -1 otherwise, clamp 0-100
+//   stress     +4 if any stat < 30, -3 if all stats ≥ 60, clamp 0-100
+// The traits influence LLM mood string and sidebar display.
+// Event flags s_traitNavFlag and s_traitScanFlag are declared as globals above.
+
+void tickTraitEvolution(unsigned long nowMs) {
+  if ((nowMs - g_lastTraitTickMs) < 60000UL) return;
+  g_lastTraitTickMs = nowMs;
+
+  // curiosity
+  if (s_traitScanFlag || g_ble.peerVisible()) {
+    g_traits.curiosity = (uint8_t)min((int)g_traits.curiosity + 3, 100);
+  } else {
+    g_traits.curiosity = (uint8_t)max((int)g_traits.curiosity - 1, 0);
+  }
+  s_traitScanFlag = false;
+
+  // activity
+  if (s_traitNavFlag) {
+    g_traits.activity = (uint8_t)min((int)g_traits.activity + 3, 100);
+  } else {
+    g_traits.activity = (uint8_t)max((int)g_traits.activity - 1, 0);
+  }
+  s_traitNavFlag = false;
+
+  // stress
+  state_count();
+  if (Hun < 30 || Fat < 30 || Cle < 30) {
+    g_traits.stress = (uint8_t)min((int)g_traits.stress + 4, 100);
+  } else if (Hun >= 60 && Fat >= 60 && Cle >= 60) {
+    g_traits.stress = (uint8_t)max((int)g_traits.stress - 3, 0);
+  }
+
+  // Persist traits every tick
+  persistLifetime();
+
+  // Feed traits into LLM personality engine so responses reflect character
+  // personality hint is a 0-100 mapped to playfulness/grumpiness/sociability
+  g_llm.traits.playfulness  = g_traits.activity;           // active = playful
+  g_llm.traits.grumpiness   = g_traits.stress;             // stressed = grumpy
+  g_llm.traits.sociability  = g_traits.curiosity;          // curious = social
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MINI-GAME: CATCH THE SIGNAL
+// ═══════════════════════════════════════════════════════════════════
+// 5-round timing game. Each round shows a moving target on the game
+// canvas. Player long-presses (readBtnA) to "catch" it. Score is
+// based on accuracy (how close to center the press lands). Earns
+// coins and exp, updates lifetime stats, boosts activity trait.
+//
+// Visual layout (128×128 virtual canvas):
+//   Row 0-10   : round indicator (●○○○○)
+//   Row 12-100 : signal bar that moves left-right
+//   Row 104-128: "CATCH!" prompt
+//
+// Called from autoPerformPlayroomAction() and from the game icon tap.
+void runMiniGame(unsigned long nowMs) {
+  const int ROUNDS    = 5;
+  const int BAR_W     = 12;
+  const int ARENA_X0  = 8;
+  const int ARENA_X1  = 108;   // rightmost valid x for bar
+  const int BAR_Y     = 52;
+  const int BAR_H     = 24;
+
+  tft.resetViewport();
+  tft.fillScreen(TFT_BLACK);
+
+  int score  = 0;
+  int caught = 0;
+
+  for (int round = 0; round < ROUNDS; ++round) {
+    // ── Round header ──────────────────────────────────────────────
+    tft.fillRect(0, 0, SCREEN_W, 13, TFT_BLACK);
+    tft.setTextColor(TFT_CYAN, TFT_BLACK);
+    tft.setTextSize(1);
+    for (int d = 0; d < ROUNDS; ++d) {
+      tft.setCursor(GAME_X + 10 + d * 14, 3);
+      tft.print(d < round ? "\xE2\x97\x8F" : "\xE2\x97\x8B");  // ● or ○
+    }
+
+    // ── "CATCH!" hint ─────────────────────────────────────────────
+    tft.fillRect(0, GAME_Y + 90, SCREEN_W, 22, TFT_BLACK);
+    tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+    tft.setCursor(GAME_X + 40, GAME_Y + 92);
+    tft.print("LONG PRESS!");
+
+    // Target zone: random center between x=28..88
+    int targetCX = 28 + (int)(esp_random() % 61);
+    int hitZone  = 14;    // ±14 px = perfect; ±22 = ok
+    int barX     = ARENA_X0;
+    int dir      = 1;
+    int speed    = 2 + round;  // increases each round
+    bool pressed = false;
+    unsigned long roundStart = millis();
+    const unsigned long ROUND_MS = 4000UL;
+
+    // Draw target zone marker
+    tft.drawRect(GAME_X + targetCX - hitZone, GAME_Y + BAR_Y - 4,
+                 hitZone * 2, BAR_H + 8, TFT_GREEN);
+
+    while (!pressed && (millis() - roundStart) < ROUND_MS) {
+      // Erase old bar
+      tft.fillRect(GAME_X + barX, GAME_Y + BAR_Y, BAR_W, BAR_H, TFT_BLACK);
+      // Move
+      barX += dir * speed;
+      if (barX < ARENA_X0)          { barX = ARENA_X0;  dir =  1; }
+      if (barX > ARENA_X1 - BAR_W)  { barX = ARENA_X1 - BAR_W; dir = -1; }
+      // Draw new bar (colour based on proximity to target)
+      int barCX = barX + BAR_W / 2;
+      int dist  = abs(barCX - (GAME_X > 0 ? targetCX : targetCX));
+      uint16_t barColor = (dist <= hitZone) ? TFT_GREEN :
+                          (dist <= hitZone * 2) ? TFT_YELLOW : TFT_RED;
+      tft.fillRect(GAME_X + barX, GAME_Y + BAR_Y, BAR_W, BAR_H, barColor);
+
+      if (readBtnA() == LOW) {
+        pressed = true;
+        caught++;
+        int finalDist = abs((barX + BAR_W / 2) - targetCX);
+        int pts = (finalDist <= hitZone) ? 3 :
+                  (finalDist <= hitZone * 2) ? 2 : 1;
+        score += pts;
+
+        // Flash feedback
+        tft.fillRect(GAME_X + barX, GAME_Y + BAR_Y, BAR_W, BAR_H, TFT_WHITE);
+        tft.setTextColor(pts >= 3 ? TFT_GREEN : TFT_YELLOW, TFT_BLACK);
+        tft.setCursor(GAME_X + 50, GAME_Y + 78);
+        tft.print(pts >= 3 ? "PERFECT!" : pts == 2 ? "GOOD" : "OK");
+        delay(500);
+      }
+      delay(16);
+    }
+
+    if (!pressed) {
+      // Miss
+      tft.setTextColor(TFT_RED, TFT_BLACK);
+      tft.setCursor(GAME_X + 54, GAME_Y + 78);
+      tft.print("MISS!");
+      delay(500);
+    }
+
+    // Clean arena for next round
+    tft.fillRect(GAME_X, GAME_Y, g_gameW, GAME_H, TFT_BLACK);
+  }
+
+  // ── Result screen ─────────────────────────────────────────────
+  tft.fillScreen(TFT_BLACK);
+  int coins = score;    // 1 coin per point, max 15
+  bool won  = (score >= 10);
+  g_lifetime.gamesPlayed++;
+  if (won) {
+    triggerRgbEvent(0, 255, 50, 2500);  // bright green: game won
+    g_lifetime.gamesWon++;;
+    Exp_mas += coins;
+    g_lifetime.coinsEarned += coins;
+    g_prefs.putInt(NVS_EXP_MAS, Exp_mas);
+  } else {
+    triggerRgbEvent(150, 50, 0, 2000);  // amber: game lost / nice try
+  }
+  // Activity boost
+  g_traits.activity = (uint8_t)min((int)g_traits.activity + 6, 100);
+  s_traitNavFlag = true;
+  persistLifetime();
+
+  tft.setTextColor(won ? TFT_GREEN : TFT_YELLOW, TFT_BLACK);
+  tft.setTextSize(1);
+  tft.setCursor(GAME_X + 10, GAME_Y + 30);
+  tft.print(won ? "YOU WIN!" : "NICE TRY!");
+  tft.setCursor(GAME_X + 10, GAME_Y + 50);
+  tft.printf("Score: %d / 15", score);
+  tft.setCursor(GAME_X + 10, GAME_Y + 68);
+  tft.printf("Caught: %d / %d", caught, ROUNDS);
+  if (won) {
+    tft.setCursor(GAME_X + 10, GAME_Y + 86);
+    tft.printf("+%d coins!", coins);
+  }
+  delay(2000);
+
+  // Restore home
+  tft.fillScreen(TFT_BLACK);
+  g_idleFirstFrame = true;
+  if (g_iconsShown) drawIconsOnly();
+
+  char msg[48];
+  snprintf(msg, sizeof(msg), won ? "Game won! +%d coins" : "Game over! Score %d", coins, score);
+  triggerFloatingMessage(msg, millis());
 }
 
 void triggerPeerConversation(const char* localText, const char* peerName, const char* peerText, unsigned long nowMs) {
@@ -6143,6 +6626,11 @@ void maybeBlePeerExchange(unsigned long nowMs) {
     g_lastPeerOfferSeq = g_ble.lastQueuedPeerSeq();
     g_lastPeerOfferUntilMs = nowMs + BLE_PEER_MESSAGE_TTL_MS + BLE_PEER_SCAN_INTERVAL_MS;
     g_lastPeerChatMs = nowMs;
+    // Notify Canvas platform — gift or wave depending on message content
+    {
+      const char* bleEvt = socialGiftKindFromText(localText) ? "gift" : "wave";
+      sendPlatformHeartbeat(nowMs, bleEvt, localText, g_ble.peerName());
+    }
   }
 #endif
 }
@@ -6309,21 +6797,18 @@ void autoPerformBathroomAction() {
 }
 
 void autoPerformPlayroomAction() {
+  // Brief intro animation using the game-walk sprite
   drawAutoRoom(roomgray, 45, 16);
   delay(250);
-
   frame1 = 0;
-  pushImageScaled(0, 12, 128, 104, gamegif[frame1]);
-  delay(250);
   for (int i = 0; i < 7; ++i) {
-    pushImageScaled(0, 12, 128, 104, gamegif[frame1]);
+    pushImageScaled(0, 12, 128, 104, gamegif[frame1 % 7]);
     frame1++;
     delay(180);
   }
-
-  Exp_mas -= 20;
-
-  drawAutoRoom(roomgray, 45, 16);
+  // Launch the mini-game
+  runMiniGame(millis());
+  s_traitNavFlag = true;   // signal activity for trait tick
 }
 
 void autoNavigateToTargetRoom(unsigned long nowMs) {
@@ -6386,7 +6871,8 @@ void autoNavigateToTargetRoom(unsigned long nowMs) {
   }
 
   // Back home: clear screen and reset idle animation so it starts fresh
-  g_navActive = false;
+  g_navActive    = false;
+  s_traitNavFlag = true;   // pet moved → activity trait boost
   if (strcmp(g_targetRoom, "LIVING") == 0) {
     tft.fillScreen(TFT_BLACK);
     frame1 = 0;
@@ -6559,11 +7045,100 @@ void processVibrationNotifications(unsigned long nowMs) {
 #endif
 }
 
-// ── RGB LED reflects current mood ────────────────────────────────────
+// ════════════════════════════════════════════════════════════════════
+//  RGB LED — multi-signal colour engine
+//
+//  Priority (highest first):
+//   1. Pet dead             → off (no glow)
+//   2. Timed event flash    → set by triggerRgbEvent() calls below
+//   3. Sick / critical stat → red fast-blink
+//   4. Night mode           → dim indigo pulse
+//   5. BLE peer visible     → cyan soft-pulse
+//   6. Stress trait high    → orange overlay
+//   7. Base LLM mood colour → modified by curiosity/activity traits
+// ════════════════════════════════════════════════════════════════════
+
+// Call this from any event handler to flash a colour for durationMs.
+void triggerRgbEvent(uint8_t r, uint8_t g, uint8_t b, unsigned long durationMs) {
+  g_rgbEventColor   = g_rgb.Color(r, g, b);
+  g_rgbEventUntilMs = millis() + durationMs;
+}
+
 void updateRgbMood() {
-  uint8_t r, g, b;
-  g_llm.getMoodColor(r, g, b);
-  g_rgb.setPixelColor(0, g_rgb.Color(r, g, b));
+  unsigned long now = millis();
+
+  // 1. Dead → off
+  if (!g_petAlive) {
+    g_rgb.setPixelColor(0, 0);
+    g_rgb.show();
+    return;
+  }
+
+  // 2. Timed event flash (BLE detect, game win/lose, WiFi found, etc.)
+  if (g_rgbEventColor && now < g_rgbEventUntilMs) {
+    g_rgb.setPixelColor(0, g_rgbEventColor);
+    g_rgb.show();
+    return;
+  }
+  g_rgbEventColor = 0;
+
+  // 3. Sick or critical stat → red fast-blink
+  if (g_petSick || Hun < 20 || Fat < 20 || Cle < 20) {
+    uint32_t col = g_rgbPulsePhase ? g_rgb.Color(255, 0, 0) : 0;
+    g_rgb.setPixelColor(0, col);
+    g_rgb.show();
+    return;
+  }
+
+  // 4. Night mode → slow indigo pulse
+  if (g_isNight) {
+    uint32_t col = g_rgbPulsePhase
+      ? g_rgb.Color(40, 0, 90)    // dim indigo on
+      : g_rgb.Color(10, 0, 30);   // dim indigo off
+    g_rgb.setPixelColor(0, col);
+    g_rgb.show();
+    return;
+  }
+
+  // 5–7. Trait-modified mood colour
+  uint8_t mr, mg, mb;
+  g_llm.getMoodColor(mr, mg, mb);
+
+  // Curiosity (0-100) → boosts blue channel (wonder/alert)
+  int blueBoost = (int)g_traits.curiosity * 60 / 100;   // 0–60
+  // Activity (0-100) → boosts green channel (energy)
+  int greenBoost = (int)g_traits.activity * 50 / 100;   // 0–50
+  // Stress (0-100) → boosts red channel, suppresses others
+  int redBoost  = (int)g_traits.stress * 80 / 100;      // 0–80
+
+  // Apply boosts with clamping
+  int r = min(255, (int)mr + redBoost - (redBoost / 3));
+  int g = min(255, (int)mg + greenBoost);
+  int b = min(255, (int)mb + blueBoost);
+
+  // Reduce green/blue when stress is very high (pet looks distressed)
+  if (g_traits.stress > 70) {
+    g = max(0, g - (int)(g_traits.stress - 70) * 2);
+    b = max(0, b - (int)(g_traits.stress - 70) * 2);
+  }
+
+  // 5. BLE peer visible → pulse toward cyan
+  if (g_ble.peerVisible()) {
+    if (g_rgbPulsePhase) {
+      r = max(0, r - 60);
+      g = min(255, g + 80);
+      b = min(255, b + 80);
+    }
+  }
+
+  // Dim LED when dark mode is active
+  if (g_darkModeActive || g_blNightDimmed) {
+    r = r / 4;
+    g = g / 4;
+    b = b / 4;
+  }
+
+  g_rgb.setPixelColor(0, g_rgb.Color((uint8_t)r, (uint8_t)g, (uint8_t)b));
   g_rgb.show();
 }
 
