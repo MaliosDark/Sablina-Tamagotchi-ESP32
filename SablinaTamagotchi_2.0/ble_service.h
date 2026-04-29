@@ -206,7 +206,7 @@ public:
     pAdv->setScanResponse(true);
     pAdv->setMinPreferred(0x06);
     _advertising = pAdv;
-    // Use standard (non-custom) advertising start — Bluedroid builds the packet
+    // Use standard (non-custom) advertising start, Bluedroid builds the packet
     // automatically including the device name and service UUID without any
     // async race conditions from the custom BLEAdvertisementData path.
     pAdv->addServiceUUID(BLE_SERVICE_UUID);
@@ -218,7 +218,7 @@ public:
       _scan->setAdvertisedDeviceCallbacks(new PeerScanCB(this), true);
       _scan->setActiveScan(true);   // active scan: sends SCAN_REQ, gets full name + mfr data
       _scan->setInterval(100);
-      _scan->setWindow(90);         // 90% duty cycle — wide window for better coverage
+      _scan->setWindow(90);         // 90% duty cycle, wide window for better coverage
     }
     // Stagger first scan so two powered-on devices don't scan simultaneously.
     _lastPeerScanMs = millis() + (_deviceId & 0xFF);
@@ -226,8 +226,8 @@ public:
     // async event chain (data config → scan resp → start) has time to complete
     // before we set our custom manufacturer-data payload.
     _firstBeaconMs = millis() + 500;
-    Serial.printf("[BLE] init done — device %s  id=0x%04X\n", _advertisedName, _deviceId);
-    // NOTE: do NOT call refreshAdvertising() here — BLEDevice::startAdvertising()
+    Serial.printf("[BLE] init done, device %s  id=0x%04X\n", _advertisedName, _deviceId);
+    // NOTE: do NOT call refreshAdvertising() here, BLEDevice::startAdvertising()
     // runs an async chain (adv data config → scan resp config → start). Calling
     // esp_ble_gap_config_adv_data_raw() before that chain completes races with it
     // and can leave advertising silently broken. The standard adv packet already
@@ -283,7 +283,7 @@ public:
       _peerOutgoingUntilMs = 0;
       refreshAdvertising();  // reverts beacon back to presence-only
     }
-    // Async scan (non-blocking) — onResult fires per-device via PeerScanCB
+    // Async scan (non-blocking), onResult fires per-device via PeerScanCB
     if (_diagMfrSeen) {
       _diagMfrSeen = false;
       Serial.printf("[BLE] mfr: len=%d b0=0x%02X('%c') b1=0x%02X('%c')\n",
@@ -377,7 +377,7 @@ private:
   BLEPeerMessage  _peerOutgoing;
   BLEPeerMessage  _peerIncoming;
   volatile bool   _peerIncomingPending = false;
-  // Diagnostic fields — written in BLE callback (no printf allowed there),
+  // Diagnostic fields, written in BLE callback (no printf allowed there),
   // read+printed safely from tick() which runs on the main task.
   volatile bool    _diagMfrSeen = false;
   volatile int     _diagMfrLen  = 0;
@@ -392,7 +392,7 @@ private:
   static constexpr uint8_t PEER_KIND_SAY      = 0x01;
   static constexpr uint8_t PEER_KIND_REPLY    = 0x02;
 
-  // No-op callback for async scan — results handled per-device via PeerScanCB::onResult
+  // No-op callback for async scan, results handled per-device via PeerScanCB::onResult
   static void _onScanDone(BLEScanResults) {}
 
   static int hexNibble(char ch) {

@@ -2164,7 +2164,7 @@ void maingif()
 
   if (g_iconsShown) {
     // Icons visible: clip the sprite draw to virtual y=[30,96) so we NEVER write
-    // into the icon rows above (y<30) or below (y>=96). Icons stay pristine — no flicker,
+    // into the icon rows above (y<30) or below (y>=96). Icons stay pristine, no flicker,
     // and the sprite is naturally "behind" the buttons with no redraw needed.
     const int16_t vx = 14, vy = 14, vw = 100, vh = 100;
     int16_t dx = GAME_X + (int32_t)vx * g_gameW / 128;
@@ -2194,7 +2194,7 @@ void maingif()
       tft.setViewport(GAME_X, GAME_Y, g_gameW, GAME_H);
     }
   } else {
-    // Icons hidden: draw full sprite — no icon zones to protect
+    // Icons hidden: draw full sprite, no icon zones to protect
     pushImageScaled(14, 14, 100, 100, sablinagif[idleFrame]);
   }
 }
@@ -5437,7 +5437,7 @@ void mainselect()
 
 void setup() 
 {
-  Serial.begin(115200);  // USB CDC — required for Serial.printf to work on ESP32-S3
+  Serial.begin(115200);  // USB CDC, required for Serial.printf to work on ESP32-S3
 
   // ── Buttons ────────────────────────────────────────────────────
   pinMode(BTN_A_PIN, INPUT_PULLUP);
@@ -5614,7 +5614,7 @@ void loop()
   if (iconsActive && !g_iconsShown) {
     // Icons just became active again.
     // While hidden, maingif drew the full sprite (including icon-row pixels).
-    // Clear both icon bands first, then redraw icons cleanly — no corrupted residue.
+    // Clear both icon bands first, then redraw icons cleanly, no corrupted residue.
     tft.resetViewport();
     int16_t topH = (int32_t)32 * GAME_H / 128;
     int16_t botY = GAME_Y + (int32_t)96 * GAME_H / 128;
@@ -6108,7 +6108,7 @@ static void _roomToWorldZone(const char* room,
   else                                     { *zoneId = "plaza";    *wx =   0; *wy =   0; }
 }
 
-// sendPlatformHeartbeat() — fire-and-forget HTTPS POST to /api/device/heartbeat.
+// sendPlatformHeartbeat(), fire-and-forget HTTPS POST to /api/device/heartbeat.
 //   socialEvent : one of "wave"|"gift"|"dance"|"party"|"visit"|nullptr (periodic only)
 //   socialMsg   : free-text to attach to the event (may be nullptr)
 //   targetAlias : peer name to show in event feed (may be nullptr)
@@ -6122,7 +6122,7 @@ void sendPlatformHeartbeat(unsigned long /*nowMs*/,
   const char* zoneId; float wx, wy;
   _roomToWorldZone(g_targetRoom, &zoneId, &wx, &wy);
 
-  // Build compact JSON body (no ArduinoJson heap needed — stats are just ints)
+  // Build compact JSON body (no ArduinoJson heap needed, stats are just ints)
   char body[320];
   if (socialEvent && socialEvent[0]) {
     snprintf(body, sizeof(body),
@@ -6154,7 +6154,7 @@ void sendPlatformHeartbeat(unsigned long /*nowMs*/,
   String host = (slash < 0) ? hostpart : hostpart.substring(0, slash);
 
   WiFiClientSecure client;
-  client.setInsecure();   // self-signed / LetsEncrypt — acceptable for hobby device
+  client.setInsecure();   // self-signed / LetsEncrypt, acceptable for hobby device
   client.setTimeout(8);   // 8-second connect timeout
 
   if (!client.connect(host.c_str(), useTLS ? 443 : 80)) return;
@@ -6532,7 +6532,7 @@ void maybeBlePeerExchange(unsigned long nowMs) {
 
   const bool peerVisible = g_ble.peerVisible();
 
-  // Periodic state dump — helps diagnose greeting-bubble timing
+  // Periodic state dump, helps diagnose greeting-bubble timing
   {
     static unsigned long s_lastDbg = 0;
     if (nowMs - s_lastDbg >= 2000) {
@@ -6558,14 +6558,14 @@ void maybeBlePeerExchange(unsigned long nowMs) {
   }
 
   // Track first detection with a persistent flag so the popup guard can't
-  // swallow justDetected — g_peerNeedGreeting stays true until the greeting
+  // swallow justDetected, g_peerNeedGreeting stays true until the greeting
   // bubble is actually shown (or the peer disappears).
   if (!g_peerWasVisible) g_peerNeedGreeting = true;
   g_peerWasVisible = true;
 
-  // Peer greetings take priority — don't let LLM thought popups block them.
+  // Peer greetings take priority, don't let LLM thought popups block them.
   if (!g_peerNeedGreeting && g_popupUntilMs && nowMs < g_popupUntilMs) {
-    return;  // popup active (and no pending peer greeting) — wait
+    return;  // popup active (and no pending peer greeting), wait
   }
 
   const bool justDetected = g_peerNeedGreeting;
@@ -6618,7 +6618,7 @@ void maybeBlePeerExchange(unsigned long nowMs) {
     g_lastPeerOfferSeq = g_ble.lastQueuedPeerSeq();
     g_lastPeerOfferUntilMs = nowMs + BLE_PEER_MESSAGE_TTL_MS + BLE_PEER_SCAN_INTERVAL_MS;
     g_lastPeerChatMs = nowMs;
-    // Notify Canvas platform — gift or wave depending on message content
+    // Notify Canvas platform, gift or wave depending on message content
     {
       const char* bleEvt = socialGiftKindFromText(localText) ? "gift" : "wave";
       sendPlatformHeartbeat(nowMs, bleEvt, localText, g_ble.peerName());
@@ -6876,7 +6876,7 @@ void autoNavigateToTargetRoom(unsigned long nowMs) {
 
 void drawFloatingMessage(unsigned long nowMs) {
   // Sprite-based bubble: render content into RAM once (on change), push atomically
-  // every frame via pushSprite() — single SPI burst, zero intermediate states = no flicker.
+  // every frame via pushSprite(), single SPI burst, zero intermediate states = no flicker.
   static TFT_eSprite s_spr = TFT_eSprite(&tft);
   static bool  s_sprAllocated   = false;
   static int   s_sprW = 0, s_sprH = 0;
@@ -7043,7 +7043,7 @@ void processVibrationNotifications(unsigned long nowMs) {
 }
 
 // ════════════════════════════════════════════════════════════════════
-//  RGB LED — multi-signal colour engine
+//  RGB LED, multi-signal colour engine
 //
 //  Priority (highest first):
 //   1. Pet dead             → off (no glow)

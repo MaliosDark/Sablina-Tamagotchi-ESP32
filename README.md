@@ -11,7 +11,7 @@
 [![WiFi Audit](https://img.shields.io/badge/WiFi-Deauth_%7C_PMKID_%7C_Handshake-ff0000.svg)](#-wifi-security-audit)
 [![Sprites](https://img.shields.io/badge/Sprites-65_Animated-ff69b4.svg)](#display--navigation)
 [![Simulator](https://img.shields.io/badge/Simulator-Browser_Based-4CAF50.svg)](#simulator)
-[![Hardware](https://img.shields.io/badge/Hardware-Untested_on_real_device-orange.svg)](#hardware)
+[![Hardware](https://img.shields.io/badge/Hardware-Tested_%26_Working-brightgreen.svg)](#hardware)
 
 <br/>
 
@@ -26,6 +26,7 @@
 ## 📑 Table of Contents
 
 - [Overview](#-overview)
+- [In Action](#-in-action)
 - [ReAct Hybrid Agent](#-react-hybrid-agent)
 - [Social Memory & Bond System](#-social-memory--bond-system)
 - [Telegram Bot](#-telegram-bot)
@@ -38,8 +39,30 @@
 - [ESP32 + LLM](#-esp32--llm)
 - [Building the Firmware](#-building-the-firmware)
 - [3D Printed Enclosure](#-3d-printed-enclosure)
+- [Platform Canvas Integration](#-platform-canvas-integration)
 - [Legal & Security](#️-legal--security)
 - [Credits & License](#-credits--license)
+
+---
+
+## 📸 In Action
+
+Two Sablina devices running side by side, BLE peer detection active, speech bubbles showing autonomous conversation in real time.
+
+<p align="center">
+  <img src="Photos/sablina_ble_chat.jpg" width="780" alt="Two Sablina devices exchanging BLE chat bubbles" style="border-radius:10px; margin-bottom:8px;"><br/>
+  <em>BLE peer chat: both devices greet each other automatically when in range</em>
+</p>
+
+<p align="center">
+  <img src="Photos/sablina_ble_thought.jpg" width="780" alt="Sablina displaying offline LLM thought bubble" style="border-radius:10px; margin-bottom:8px;"><br/>
+  <em>Offline LLM engine: autonomous mood-driven thoughts without WiFi or cloud</em>
+</p>
+
+<p align="center">
+  <img src="Photos/sablina_ble_idle.jpg" width="780" alt="Two Sablina devices idle with BLE peer detected" style="border-radius:10px; margin-bottom:8px;"><br/>
+  <em>Both devices powered on, BLE peer bond detected, affinity system active</em>
+</p>
 
 ---
 
@@ -47,7 +70,7 @@
 
 <img src="Photos/simulator/Sablina.jpg" align="right" width="220" alt="Sablina" style="margin-left:20px; margin-bottom:10px; border-radius:8px;">
 
-Sablina Tamagotchi is a dual-purpose ESP32-S3 device: a fully-featured virtual pet **and** a WiFi security auditing tool inspired by [Pwnagotchi](https://pwnagotchi.ai/). While you care for your pixel pet, the device passively monitors 802.11 traffic, captures WPA handshakes, extracts PMKIDs, and can perform targeted deauthentication attacks, all through a cute interface on a 1.47" IPS display.
+Sablina is a dual-purpose ESP32-S3 device: a fully-featured virtual pet **and** a WiFi security auditing tool inspired by [Pwnagotchi](https://pwnagotchi.ai/). While you care for your pixel pet, the device passively monitors 802.11 traffic, captures WPA handshakes, extracts PMKIDs, and can perform targeted deauthentication attacks, all through a cute interface on a 1.47" IPS display.
 
 The project includes three firmware variants and a full browser-based simulator:
 
@@ -698,8 +721,9 @@ stateDiagram-v2
     EGG --> BABY: Hatch (10s)
 
     BABY --> CHILD: Age > 1 day
-    CHILD --> ADULT: Age > 3 days
-    ADULT --> ELDER: Age > 7 days
+    CHILD --> TEEN: Age > 3 days
+    TEEN --> ADULT: Age > 7 days
+    ADULT --> ELDER: Age > 30 days
 
     state "Alive States" as alive {
         IDLE --> EATING: Feed
@@ -833,27 +857,40 @@ sequenceDiagram
 - **Cross-reboot persistence**, Social memory survives power cycles via `Preferences` NVS (Arduino) / `localStorage` (simulator)
 
 ### 🐣 Core Pet Simulation
-- **Life stages**, Egg → Baby → Child → Adult → Elder with hatching animation
-- **Needs system**, Hunger, Happiness, and Health stats with autonomous decay
-- **Death & revival**, Pet dies if HP reaches zero for 30 seconds; long-press to revive
-- **Dynamic mood**, 7 moods (Happy, Excited, Hungry, Sick, Bored, Curious, Sleepy) derived from stats + environment
-- **Coin economy**, Earn from WiFi discoveries, BLE encounters, mini-games, and passive bonuses
-- **Trait evolution**, Curiosity, Activity, and Stress traits evolve based on behavior patterns
+- **Life stages**, Baby → Child → Teen → Adult → Elder; stage advances automatically based on age and average stat health (BABY <1 d, CHILD 1 d+, TEEN 3 d+, ADULT 7 d+, ELDER 30 d+)
+- **Needs system**, Hunger, Fatigue, Cleanliness, and Happiness stats with autonomous decay; each decays at its own rate determined by the active LLM mode and WiFi activity
+- **Sickness system**, Pet becomes sick when Cleanliness stays below 20 for an extended time; red LED flash + Telegram alert; heals automatically when Cle rises above 50
+- **Death & revival**, Pet dies if any critical stat stays at ≤ 5 for too long; Telegram notification includes the pet's age; long-press BTN_A on the home screen to revive
+- **Dynamic mood**, 7 moods (Happy, Excited, Hungry, Sick, Bored, Curious, Sleepy) derived from live stat values + environment; mood drives the LLM prompt template selection
+- **Coin economy**, Earned from WiFi discoveries (async scan), BLE peer encounters, mini-game scores, shop returns, and passive daily bonuses; spent on Shop wallpapers (10 coins each)
+- **Trait evolution**, Curiosity, Activity, and Stress traits evolve continuously; navigation events raise Activity, WiFi scan events raise Curiosity, prolonged stat-critical states raise Stress; all three modulate the LLM personality and archetype in real time
+- **Lifetime statistics**, NVS-backed persistent counters for food eaten, cleans, sleeps, pets, games played/won, coins earned/spent, WiFi scans, maximum networks found — all survive power cycles and display on the Stats Lifetime page
 
 ### 📡 Environment Awareness
 - **WiFi scanning**, Detects nearby networks; count influences mood and coin income
 - **BLE scanning**, Discovers Bluetooth devices; affects mood and curiosity trait
 - **Day/night cycle**, Visual tint at night; pet auto-sleeps after midnight
 - **BLE peer interaction**, Two Tamagotchis discover each other and autonomously share food, play, comfort, and explore
+- **Background WiFi audit (async, every 90 s)**, Non-blocking `WiFi.scanNetworks(async=true)` runs passively without interrupting BLE, Telegram, or LLM; awards +1 coin per 3 networks found (capped at +5 per scan); triggers the curiosity trait boost and a brief ice-blue NeoPixel flash; deduplication and PMKID extraction happen in-scan without blocking the main loop
+- **Stat-based autonomous navigation (every 45 s)**, Independent of the LLM, the firmware evaluates HUN/FAT/CLE every 45 seconds; if a stat is **critical** (<25) it immediately queues the matching room action; if **low** (<45) it nudges toward that room; resets to `LIVING` once the need is satisfied; runs up to 6 room hops before returning home
 
 ### 🎮 Interactions
-- **Feed, Clean, Sleep, Pet, Shake**, Standard care commands with stat effects and sound
-- **Hunt**, Scan WiFi networks to earn food and coins
-- **Discover**, Garden exploration for items and coins
-- **Mini-game**, "Catch the Signal", 5-round timing game earning coins and happiness
-- **Shop**, Purchase items with coins (sushi, clothing, accessories)
+- **Feed**, 21 food items across 7 pages (f01–f21); each item restores Hunger by +15, +5, or +2 depending on item tier; animated 11-frame eating sequence plays every selection
+- **Sleep**, 4 duration options: 5 min (+2 FAT), 20 min (+10 FAT), 1 hour (+20 FAT), 8 hours (+50 FAT); animated falling-asleep sequence + floating Z/z overlay during sleep countdown
+- **Clean/Shower**, Animated shower sequence (+50 CLE); disabled with "No need to shower" message when Cle > 90
+- **Pet, Shake**, Affection inputs; IMU (QMI8658) detects physical shaking and fires a `shaken` personality event through the LLM engine
+- **Room navigation**, Full house map with 5 navigable hotspots accessed via the Rooms (door) icon; each room opens a sub-menu with location-specific actions:
+  - **Kitchen** (red room) — food sub-menu, same 21-item feed selection as the main feed icon
+  - **Bedroom** (gray room) — sleep menu + in-room computer that opens the **Sic Bo dice game** (bet Big/≥7 or Small/≤6 on two revealed dice; +2 coins win, −2 coins loss)
+  - **Bathroom** (blue room) — shower action identical to the main clean icon
+  - **Garden** (green room) — walk+explore sequence: animated forest1/forest2 walk followed by the garden exploration area with coin and item rewards
+  - **Living room** (white room) — central hub and idle home base
+- **Catch the Signal (mini-game)**, 5-round reaction timing game: a colored bar slides across the screen at increasing speed each round; long-press BTN_A when the bar is over the green target zone to "catch" it; scores PERFECT (+3), GOOD (+2), or OK (+1) per round; earns up to 15 coins; boosts the Activity trait; accessible autonomously from the Playroom navigation action
+- **Sic Bo (dice game)**, Available inside the Bedroom via the computer sub-menu; pure betting game on two random dice, ±2 coins per round; exit via the Exit option
+- **Collection Box**, Inventory of all purchased shop pictures; items not yet purchased display "Did not buy"; cycles through all 6 slots with BTN_B
+- **Shop**, 6 rotating decorative wallpaper pictures (colorgif) purchasable for 10 coins each; daily picture rotation (every 24 h); prevents re-purchase of already owned items; coin balance checked before purchase; purchases persist across reboots in NVS
 
-### � Hardware Feedback
+### 🔊 Hardware Feedback
 - **Audio**, 11 sound effects via piezo buzzer (feed, clean, play, sleep, death, hatch, coin, warnings, etc.)
 - **Haptic**, Vibration motor pulses on pet/shake actions, warnings, death, and BLE events
 - **NeoPixel LED**, Mood-colored RGB glow reflecting current emotional state
@@ -864,6 +901,20 @@ sequenceDiagram
 - **Template system**, Mood-specific, activity-specific, and environment-aware narrative templates
 - **Optional LAN endpoint**, Connect to Ollama/LM Studio for richer AI-generated responses
 - **On-device inference**, TinyStories 260K model runs directly on ESP32-S3 (ESP-IDF variant)
+- **Personality archetypes**, 7 derived archetypes computed from trait values and displayed on the Soul Card:
+
+  | Archetype | Trait condition |
+  |:----------|:----------------|
+  | **GHOST HUNTER** | Playfulness > 70, Sociability > 70, Grumpiness < 40 |
+  | **CHAOS AGENT** | Grumpiness > 70, Sociability > 70 |
+  | **SILENT OBSERVER** | Playfulness > 70, Sociability < 30 |
+  | **PACKET HUNTER** | Sociability > 70, Grumpiness < 30 |
+  | **SLEEPY LURKER** | Playfulness < 30, Sociability < 30 |
+  | **APEX PREDATOR** | Playfulness > 60, Sociability > 60, Grumpiness > 60 |
+  | **NET WANDERER** | Default (none of the above) |
+
+- **Hacker Rank**, Point-based rank computed from lifetime audit counters: `pts = HS×5 + PMKID×3 + deauths + wifiScans×2 + maxNets`; five tiers displayed on the Achievements page and Soul Card: **NOOB** (<10), **WARDRIVER** (<50), **PKTSNIPER** (<200), **WIFI NINJA** (<1000), **ELITE HACKER** (≥1000)
+- **LLM-driven navigation**, When LLM output contains room keywords, `updateTargetRoomFromText()` extracts intent and `autoNavigateToTargetRoom()` queues the matching autonomous room action
 
 ### 📱 Telegram Bot
 - **Interactive inline keyboards**, Full control panel with tap-to-use buttons,no slash commands needed
@@ -879,11 +930,16 @@ sequenceDiagram
 
 ### 🖥 Display & Navigation
 - **172×320 IPS LCD** (ST7789) with 65 animated pixel-art sprites
-- **2-button navigation**, BTN B cycles screens, BTN A selects, long-press A returns home
-- **9 screens**, Home, Pet Status (visual pixel bars), Shop, Achievements, Tools, Stats, Forest, WiFi Hunt, plus legacy ENV/SYS redirect to Stats
-- **Achievements**, 4 pages: 18 collectible badges (pg 0-2) + Hacker Rank card with 5 tiers (pg 3)
-- **Tools**, 5 pages: WiFi Audit, BLE Scan (animated pulse), Signal Meter (animated bars), Network List (discovered APs with signal strength), Audit Log (timestamped capture events)
-- **Stats**, 5 pages: Pet Vitals (pixel-bar visualizations), Time & Age, Environment, System, Lifetime totals
+- **Single-button navigation**, GPIO0 (BOOT) is the only physical button; three virtual gestures: **short tap** (<400 ms) cycles the icon cursor, **hold** (≥400 ms) selects/enters the highlighted item, **extra-long hold** (≥1800 ms) exits/returns instantly without releasing
+- **8-icon main menu**, Two rows of four icons on the home screen; cursor wraps around; icon order: Pet Status (Soul Card), Food, Sleep, Clean, Shop, Rooms, Tools, Settings
+- **Soul Card (Pet Status screen)**, Full-screen pet biography: name, life stage badge, age in hours/days, Alive/Sick/Dead status, current mood, personality archetype label, colour-coded stat bars (HUN/FAT/CLE/HAP), coin balance, cumulative WiFi audit counters (handshakes / PMKIDs / deauths), and current Hacker Rank
+- **Stats**, 6 pages: Vitals with LLM trait bars (Playfulness / Sociability / Grumpiness), Time & Age, Environment (AP count / RSSI / encryption breakdown / BLE peer name), System (firmware / uptime / WiFi / BLE / LLM state), Lifetime totals (food eaten / cleans / sleeps / games played & won / coins), Achievements summary (badge grid + Hacker Rank score)
+- **Tools**, 5 pages: WiFi Audit, BLE Scan (animated pulse rings), Signal Meter (animated RSSI bars), Network List (discovered APs with signal strength), Audit Log (timestamped capture events)
+- **Achievements**, 4 pages: 18 collectible badges (pg 0–2) + Hacker Rank card with 5 tiers (pg 3)
+- **Sidebar auto-hide**, After 15 s of button inactivity the right icon sidebar collapses and the game canvas expands to full 318 px width; restores immediately on the next button press
+- **Sprite-based rendering**, LLM thought bubbles and BLE peer conversation bubbles render into an off-screen `TFT_eSprite` buffer then `pushSprite()` atomically, eliminating flicker during overlay animation
+- **Settings menu**, Two sub-menus: **Mode** (Light / Dark theme toggle, persists in NVS) and **Brightness** (6 PWM levels 0–5 via `ledcAttach` / `ledcWrite` on backlight GPIO46)
+- **Warning icon blink**, Home-screen warn icon blinks when any stat drops below 60 or the pet enters the Sick state
 - **Auto-hiding icons**, Action icons appear on home screen and fade after inactivity
 - **Notification bubbles**, LLM thoughts and events as floating overlays
 - **Battery management**, LiPo charging with drain simulation based on radio usage
@@ -1169,6 +1225,33 @@ The enclosure is designed for the **ESP32 1.47″ LCD** form factor.
 | `Gehäuse.step` | STEP | Editable CAD source |
 
 > **Design credit:** [ESP32 LCD 1.47 Case](https://makerworld.com/en/models/1301018-esp32-lcd-1-47-case#profileId-1333349) on MakerWorld. If you print or remix this enclosure, please credit the original designer.
+
+## 🌐 Platform Canvas Integration
+
+Sablina can report its state to an external **Canvas API server** (e.g. a custom dashboard or logging endpoint) over WiFi. Credentials are provisioned at runtime via BLE commands from the companion app — no hardcoded secrets.
+
+### Configuration (via BLE)
+
+```
+url:<base_url>      → stored in g_platformUrl[128] (NVS-backed)
+key:<api_key>       → stored in g_platformKey[64]  (NVS-backed)
+```
+
+### Heartbeat (every 60 s)
+
+When both `g_platformUrl` and `g_platformKey` are set and WiFi is connected, the firmware calls `sendPlatformHeartbeat()` which HTTP POSTs a JSON payload containing:
+
+- Pet vitals (HUN / FAT / CLE / HAP as 0–100 integers)
+- Current mood string and life stage
+- Active BLE peer alias (if present)
+- WiFi audit totals (handshakes / PMKIDs / deauths)
+- Hacker Rank string
+
+### Social Event Reporting
+
+When a BLE peer interaction occurs (greeting, gift exchange, comfort, play), the next heartbeat includes extra fields: `socialEvent` (event type), `socialMsg` (narrative), and `targetAlias` (peer name), letting the Canvas dashboard log Tamagotchi social activity in real time.
+
+---
 
 ## ⚖️ Legal & Security
 

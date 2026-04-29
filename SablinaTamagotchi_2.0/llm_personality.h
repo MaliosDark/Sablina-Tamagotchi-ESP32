@@ -196,7 +196,7 @@ public:
       return;
     }
 
-    // Ongoing chat — mood-driven
+    // Ongoing chat, mood-driven
     if (currentMood == MOOD_PLAYFUL || currentMood == MOOD_EXCITED) {
       static const char* play[] = {
         "Race time?", "Wanna play?", "Let's have fun!", "Challenge me!",
