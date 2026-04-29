@@ -222,6 +222,10 @@ public:
     }
     // Stagger first scan so two powered-on devices don't scan simultaneously.
     _lastPeerScanMs = millis() + (_deviceId & 0xFF);
+    // Schedule presence beacon ~500 ms after init so startAdvertising()'s
+    // async event chain (data config → scan resp → start) has time to complete
+    // before we set our custom manufacturer-data payload.
+    _firstBeaconMs = millis() + 500;
     Serial.printf("[BLE] init done — device %s  id=0x%04X\n", _advertisedName, _deviceId);
     // NOTE: do NOT call refreshAdvertising() here — BLEDevice::startAdvertising()
     // runs an async chain (adv data config → scan resp config → start). Calling
@@ -280,6 +284,17 @@ public:
       refreshAdvertising();  // reverts beacon back to presence-only
     }
     // Async scan (non-blocking) — onResult fires per-device via PeerScanCB
+    if (_diagMfrSeen) {
+      _diagMfrSeen = false;
+      Serial.printf("[BLE] mfr: len=%d b0=0x%02X('%c') b1=0x%02X('%c')\n",
+        _diagMfrLen, _diagMfrB0, (_diagMfrB0 >= 32 && _diagMfrB0 < 127) ? (char)_diagMfrB0 : '?',
+        _diagMfrB1, (_diagMfrB1 >= 32 && _diagMfrB1 < 127) ? (char)_diagMfrB1 : '?');
+    }
+    // Deferred first-beacon: set custom adv data after startAdvertising() async chain settles.
+    if (_firstBeaconMs && now >= _firstBeaconMs) {
+      _firstBeaconMs = 0;
+      refreshAdvertising();
+    }
     if (_scan && (now - _lastPeerScanMs) > BLE_PEER_SCAN_INTERVAL_MS) {
       _lastPeerScanMs = now;
       _scan->clearResults();
@@ -355,12 +370,19 @@ private:
   BLEScan*        _scan           = nullptr;
   unsigned long   _lastPeerScanMs     = 0;
   unsigned long   _peerOutgoingUntilMs = 0;
+  unsigned long   _firstBeaconMs      = 0;
   uint16_t        _deviceId       = 0;
   uint8_t         _peerSeq        = 0;
   char            _advertisedName[24] = BLE_DEVICE_NAME;
   BLEPeerMessage  _peerOutgoing;
   BLEPeerMessage  _peerIncoming;
   volatile bool   _peerIncomingPending = false;
+  // Diagnostic fields — written in BLE callback (no printf allowed there),
+  // read+printed safely from tick() which runs on the main task.
+  volatile bool    _diagMfrSeen = false;
+  volatile int     _diagMfrLen  = 0;
+  volatile uint8_t _diagMfrB0   = 0;
+  volatile uint8_t _diagMfrB1   = 0;
 
   static constexpr uint8_t PEER_COMPANY_ID_LO = 0xFF;
   static constexpr uint8_t PEER_COMPANY_ID_HI = 0xFF;
@@ -475,26 +497,18 @@ private:
     return out->valid;
   }
 
-  // Update advertising payload in-place using the raw Bluedroid API.
-  // This avoids the stop→setData→start race condition where ADV_STOP_COMPLETE_EVT
-  // can restart advertising with stale data before the new data is configured.
-  // esp_ble_gap_config_adv_data_raw() is safe to call while advertising is running;
-  // the controller uses the new payload on the next advertising event.
+  // Update advertising payload using the BLEAdvertisementData API.
+  // This sets m_customAdvData=true on BLEAdvertising so the data survives
+  // any internal auto-restart without being overwritten by the default
+  // structured-adv path.
   void refreshAdvertising() {
     const bool hasMsg = _peerOutgoing.valid && _peerOutgoing.text[0];
     const String payload = hasMsg ? buildPeerPayload() : buildPresenceBeacon();
 
-    // Build raw AD bytes: Flags (3B) + Manufacturer Specific (2+N B)
-    uint8_t buf[31];
-    uint8_t i = 0;
-    buf[i++] = 0x02; buf[i++] = 0x01; buf[i++] = 0x06;  // Flags: LE General Discoverable
-    const uint8_t dlen = (uint8_t)payload.length();
-    buf[i++] = (uint8_t)(dlen + 1);  // length field includes type byte
-    buf[i++] = 0xFF;                 // AD type: Manufacturer Specific
-    for (uint8_t j = 0; j < dlen && i < 31; j++) buf[i++] = (uint8_t)payload[j];
-#ifdef CONFIG_BLUEDROID_ENABLED
-    esp_ble_gap_config_adv_data_raw(buf, i);
-#endif
+    BLEAdvertisementData advData;
+    advData.setFlags(0x06);  // LE General Discoverable, BR/EDR Not Supported
+    advData.setManufacturerData(payload);
+    BLEDevice::getAdvertising()->setAdvertisementData(advData);
   }
 
   void rememberIncomingMessage(const BLEPeerMessage& msg) {
@@ -517,7 +531,11 @@ private:
   void rememberPeer(BLEAdvertisedDevice& advertisedDevice) {
     // ── Manufacturer data path (message exchange) ──────────────────
     if (advertisedDevice.haveManufacturerData()) {
-      const String& mfr = advertisedDevice.getManufacturerData();
+      const String mfr = advertisedDevice.getManufacturerData();
+      _diagMfrLen   = (int)mfr.length();
+      _diagMfrB0    = mfr.length() > 0 ? (uint8_t)mfr[0] : 0;
+      _diagMfrB1    = mfr.length() > 1 ? (uint8_t)mfr[1] : 0;
+      _diagMfrSeen  = true;
       uint16_t sid = 0;
       if (mfr.length() >= 6 && mfr[0] == 'S' && mfr[1] == 'B' &&
           parseHexWord(mfr.c_str() + 2, &sid) && sid != _deviceId) {
@@ -529,7 +547,6 @@ private:
         peer.rssi = advertisedDevice.getRSSI();
         peer.lastSeenMs = millis();
         peer.visible = true;
-        Serial.printf("[BLE] peer via mfr: %s rssi=%d\n", peer.name, peer.rssi);
         BLEPeerMessage incoming;
         if (decodePeerPayload(mfr, &incoming)) {
           rememberIncomingMessage(incoming);
@@ -561,6 +578,5 @@ private:
     peer.rssi = advertisedDevice.getRSSI();
     peer.lastSeenMs = millis();
     peer.visible = true;
-    Serial.printf("[BLE] peer via name: %s rssi=%d\n", peer.name, peer.rssi);
   }
 };

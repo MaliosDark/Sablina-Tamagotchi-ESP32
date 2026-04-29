@@ -206,6 +206,8 @@ unsigned long g_popupUntilMs     = 0;
 unsigned long g_lastPeerChatMs   = 0;
 bool          g_popupDualSpeaker = false;
 bool          g_peerWasVisible   = false;
+bool          g_peerNeedGreeting = false;  // persists through popup guard until greeting is shown
+bool          g_bubbleDirty      = false;  // set after maingif() so drawFloatingMessage redraws once
 char          g_lastPeerOfferText[BLE_PEER_MESSAGE_MAX_TEXT + 1] = "";
 uint8_t       g_lastPeerOfferSeq = 0;
 unsigned long g_lastPeerOfferUntilMs = 0;
@@ -5835,6 +5837,7 @@ void loop()
 
   // ── Idle animation: drawn last so navigation/actions always finish first ──
   maingif();
+  g_bubbleDirty = true;  // maingif may have overdrawn the bubble area; force one redraw
 
   // ── Bubble drawn AFTER idle sprite so it always appears in front ──
   drawFloatingMessage(now);
@@ -6455,6 +6458,7 @@ void triggerPeerConversation(const char* localText, const char* peerName, const 
   g_pendingBeeps = SOUND_NOTIFY_BEEPS;
   g_pendingVibes = VIBRO_NOTIFY_PULSES;
   g_lastBeepMs = 0;
+  Serial.printf("[PEER] dual bubble: me=\"%s\" peer=\"%s\" until=%lu\n", localText, peerText, g_popupUntilMs);
 }
 
 void choosePeerOfferText(bool justDetected, char* out, size_t outLen) {
@@ -6582,8 +6586,20 @@ void maybeBlePeerExchange(unsigned long nowMs) {
   }
 
   const bool peerVisible = g_ble.peerVisible();
+
+  // Periodic state dump — helps diagnose greeting-bubble timing
+  {
+    static unsigned long s_lastDbg = 0;
+    if (nowMs - s_lastDbg >= 2000) {
+      s_lastDbg = nowMs;
+      Serial.printf("[DBG] pv=%d wasV=%d needG=%d popup=%lu now=%lu offerSeq=%u\n",
+        peerVisible, g_peerWasVisible, (int)g_peerNeedGreeting,
+        g_popupUntilMs, nowMs, g_lastPeerOfferSeq);
+    }
+  }
   if (!peerVisible) {
     g_peerWasVisible = false;
+    g_peerNeedGreeting = false;
     g_lastPeerOfferSeq = 0;
     g_lastPeerOfferText[0] = '\0';
     g_lastPeerOfferUntilMs = 0;
@@ -6596,28 +6612,34 @@ void maybeBlePeerExchange(unsigned long nowMs) {
     g_lastPeerOfferUntilMs = 0;
   }
 
-  if (g_popupUntilMs && nowMs < g_popupUntilMs) {
-    return;
+  // Track first detection with a persistent flag so the popup guard can't
+  // swallow justDetected — g_peerNeedGreeting stays true until the greeting
+  // bubble is actually shown (or the peer disappears).
+  if (!g_peerWasVisible) g_peerNeedGreeting = true;
+  g_peerWasVisible = true;
+
+  // Peer greetings take priority — don't let LLM thought popups block them.
+  if (!g_peerNeedGreeting && g_popupUntilMs && nowMs < g_popupUntilMs) {
+    return;  // popup active (and no pending peer greeting) — wait
   }
 
-  const bool justDetected = !g_peerWasVisible;
-  g_peerWasVisible = true;
-  notePeerEncounter(g_ble.peer.senderId, g_ble.peerName(), justDetected);
+  const bool justDetected = g_peerNeedGreeting;
 
   // ── Immediate single-speaker bubble on first detection ──────────
-  // Show the greeting right away instead of waiting for the full 2-way exchange.
-  // The dual-speaker bubble will replace this when the reply arrives.
-  if (justDetected && !g_popupUntilMs) {
+  if (justDetected) {
+    notePeerEncounter(g_ble.peer.senderId, g_ble.peerName(), true);
     char firstSeen[BLE_PEER_MESSAGE_MAX_TEXT + 1];
     choosePeerOfferText(true, firstSeen, sizeof(firstSeen));
     if (firstSeen[0]) {
       strlcpy(g_popupText, firstSeen, sizeof(g_popupText));
       g_popupPeerText[0] = '\0';
       g_popupDualSpeaker = false;
-      g_popupUntilMs = nowMs + 5000;
+      g_popupUntilMs = nowMs + 8000;
       g_pendingBeeps = SOUND_NOTIFY_BEEPS;
       g_pendingVibes = VIBRO_NOTIFY_PULSES;
       g_lastBeepMs = 0;
+      g_peerNeedGreeting = false;  // consumed
+      Serial.printf("[PEER] bubble set: \"%s\" until=%lu\n", firstSeen, g_popupUntilMs);
     }
   }
 
@@ -6908,117 +6930,122 @@ void autoNavigateToTargetRoom(unsigned long nowMs) {
 }
 
 void drawFloatingMessage(unsigned long nowMs) {
-  // Static vars to track where the bubble was last drawn so we can erase it.
-  static bool g_bubbleDrawn = false;
-  static int  g_bubbleErasY = 0;
-  static int  g_bubbleErasH = 0;
-
-  // Static cache for skip-redraw optimisation (defined here so accessible in erase block too)
-  static char   s_bubbleCacheLocal[192] = "";
-  static char   s_bubbleCachePeer[192]  = "";
-  static int    s_bubbleCacheBy         = -1;
-  static bool   s_bubbleCacheDual       = false;
+  // Sprite-based bubble: render content into RAM once (on change), push atomically
+  // every frame via pushSprite() — single SPI burst, zero intermediate states = no flicker.
+  static TFT_eSprite s_spr = TFT_eSprite(&tft);
+  static bool  s_sprAllocated   = false;
+  static int   s_sprW = 0, s_sprH = 0;
+  static bool  g_bubbleDrawn    = false;
+  static int   g_bubbleErasY    = 0;
+  static int   g_bubbleErasH    = 0;
+  static char  s_cacheLocal[192] = "";
+  static char  s_cachePeer[192]  = "";
+  static int   s_cacheBy         = -1;
+  static bool  s_cacheDual       = false;
 
   bool active = (g_popupUntilMs != 0 && nowMs <= g_popupUntilMs && g_popupText[0]);
 
   if (!active) {
     if (g_bubbleDrawn) {
-      // Erase the exact strip where the bubble was drawn.
+      if (s_sprAllocated) { s_spr.deleteSprite(); s_sprAllocated = false; }
       tft.resetViewport();
       tft.fillRect(0, g_bubbleErasY, SIDEBAR_X, g_bubbleErasH, TFT_BLACK);
-      // Restore icon row if it was in that zone and icons are still visible.
       if (g_iconsShown) drawIconsOnly();
       tft.setViewport(GAME_X, GAME_Y, g_gameW, GAME_H);
       g_bubbleDrawn = false;
-      // Invalidate cache so next popup always redraws
-      s_bubbleCacheLocal[0] = '\0';
-      s_bubbleCachePeer[0]  = '\0';
-      s_bubbleCacheBy       = -1;
+      s_cacheLocal[0] = '\0'; s_cachePeer[0] = '\0'; s_cacheBy = -1;
     }
+    g_bubbleDirty = false;
     return;
   }
 
-  tft.resetViewport();
-  tft.setTextSize(1);
-
   const bool dualSpeaker = g_popupDualSpeaker && g_popupPeerText[0];
-  const int  bw = dualSpeaker ? 250 : 210;
-  const int  bh = dualSpeaker ?  50 :  26;
+  const int  bh = dualSpeaker ? 50 : 26;
   const int  bx = 4;
+  const int  maxBw = SIDEBAR_X - bx - 4;
+  int bw;
+  if (dualSpeaker) {
+    const int w1 = (int)min(strlen(g_llm.traits.name), (size_t)8)  + 2 + (int)min(strlen(g_popupText),     (size_t)25);
+    const int w2 = (int)min(strlen(g_popupPeerName),   (size_t)10) + 2 + (int)min(strlen(g_popupPeerText), (size_t)24);
+    bw = max(80, min(max(w1, w2) * 6 + 20, maxBw));
+  } else {
+    bw = max(50, min((int)min(strlen(g_popupText), (size_t)38) * 6 + 16, maxBw));
+  }
 
-  // Place bubble in the middle animation zone when icons are visible
-  // (avoids overlapping the bottom icon row at physical y≈135).
-  // When icons are hidden use the bottom of the screen.
   int by;
   if (g_iconsShown) {
-    // Just below the top icon row  (virtual y=30 → physical y ≈ 51)
-    by = GAME_Y + (int32_t)32 * GAME_H / 128 + 2;   // ≈ 56 px from top
+    by = GAME_Y + (int32_t)32 * GAME_H / 128 + 2;
   } else {
-    by = SCREEN_H - bh - 4;                           // near bottom
+    by = SCREEN_H - bh - 4;
   }
 
-  // Skip redraw if nothing changed — avoids clear→draw flicker on every loop tick.
-  // Exception: if maingif just drew a new animation frame it may have overwritten the bubble,
-  // so force a redraw to bring the bubble back to the front.
-  bool idleDirty = g_idleFrameDrawn;
-  g_idleFrameDrawn = false;  // consume the flag
-  if (!idleDirty
-      && g_bubbleDrawn
-      && by == s_bubbleCacheBy
-      && dualSpeaker == s_bubbleCacheDual
-      && strcmp(g_popupText,     s_bubbleCacheLocal) == 0
-      && strcmp(g_popupPeerText, s_bubbleCachePeer)  == 0) {
-    return;  // same content at same position — nothing to repaint
+  const bool contentChanged =
+    strcmp(s_cacheLocal, g_popupText)     != 0 ||
+    strcmp(s_cachePeer,  g_popupPeerText) != 0 ||
+    s_cacheBy   != by                          ||
+    s_cacheDual != dualSpeaker;
+
+  // Re-render sprite only when content/position changes (rare).
+  if (contentChanged || !s_sprAllocated || s_sprW != bw || s_sprH != bh) {
+    if (s_sprAllocated) { s_spr.deleteSprite(); s_sprAllocated = false; }
+    s_spr.setColorDepth(16);
+    s_spr.setSwapBytes(true);
+    if (s_spr.createSprite(bw, bh)) {
+      s_sprAllocated = true;
+      s_sprW = bw; s_sprH = bh;
+
+      if (dualSpeaker) {
+        char localLabel[24], peerLabel[24], localLine[56], peerLine[56];
+        trimChatLine(g_llm.traits.name, localLabel, sizeof(localLabel), 8);
+        trimChatLine(g_popupPeerName,   peerLabel,  sizeof(peerLabel),  10);
+        trimChatLine(g_popupText,       localLine,  sizeof(localLine),  25);
+        trimChatLine(g_popupPeerText,   peerLine,   sizeof(peerLine),   24);
+
+        s_spr.fillSprite(TFT_BLACK);
+        s_spr.drawRoundRect(0, 0, bw, bh, 8, CHAT_BUBBLE_FRAME_COLOR);
+        s_spr.fillRoundRect(4, 4,  bw - 8, 17, 5, CHAT_LOCAL_BG_COLOR);
+        s_spr.fillRoundRect(4, 28, bw - 8, 17, 5, CHAT_PEER_BG_COLOR);
+        s_spr.setTextSize(1);
+        s_spr.setTextColor(CHAT_LOCAL_TEXT_COLOR, CHAT_LOCAL_BG_COLOR);
+        s_spr.setCursor(8, 10);
+        s_spr.print(localLabel); s_spr.print(": "); s_spr.print(localLine);
+        s_spr.setTextColor(CHAT_PEER_TEXT_COLOR, CHAT_PEER_BG_COLOR);
+        s_spr.setCursor(8, 34);
+        s_spr.print(peerLabel); s_spr.print(": "); s_spr.print(peerLine);
+      } else {
+        char line[48];
+        trimChatLine(g_popupText, line, sizeof(line), 38);
+        s_spr.fillRoundRect(0, 0, bw, bh, 6, CHAT_LOCAL_BG_COLOR);
+        s_spr.drawRoundRect(0, 0, bw, bh, 6, CHAT_BUBBLE_FRAME_COLOR);
+        s_spr.setTextSize(1);
+        s_spr.setTextColor(CHAT_LOCAL_TEXT_COLOR, CHAT_LOCAL_BG_COLOR);
+        s_spr.setCursor(6, 8);
+        s_spr.print(line);
+      }
+    }
+
+    // Erase old position if moved
+    if (g_bubbleDrawn && by != g_bubbleErasY) {
+      tft.resetViewport();
+      tft.fillRect(0, g_bubbleErasY, SIDEBAR_X, g_bubbleErasH, TFT_BLACK);
+    }
+
+    strlcpy(s_cacheLocal, g_popupText,     sizeof(s_cacheLocal));
+    strlcpy(s_cachePeer,  g_popupPeerText, sizeof(s_cachePeer));
+    s_cacheBy   = by;
+    s_cacheDual = dualSpeaker;
+    g_bubbleDrawn = true;
+    g_bubbleErasY = by;
+    g_bubbleErasH = bh;
   }
 
-  // Erase previous bubble if position changed (e.g. icons just toggled).
-  if (g_bubbleDrawn && by != g_bubbleErasY) {
-    tft.fillRect(0, g_bubbleErasY, SIDEBAR_X, g_bubbleErasH, TFT_BLACK);
+  // Push sprite to screen every frame when dirty (single atomic SPI burst = no flicker).
+  if (s_sprAllocated && (g_bubbleDirty || contentChanged)) {
+    g_bubbleDirty = false;
+    tft.resetViewport();
+    s_spr.pushSprite(bx, by);
+    tft.setViewport(GAME_X, GAME_Y, g_gameW, GAME_H);
   }
-  g_bubbleDrawn = true;
-  g_bubbleErasY = by;
-  g_bubbleErasH = bh;
-
-  // Update cache
-  strlcpy(s_bubbleCacheLocal, g_popupText,     sizeof(s_bubbleCacheLocal));
-  strlcpy(s_bubbleCachePeer,  g_popupPeerText, sizeof(s_bubbleCachePeer));
-  s_bubbleCacheBy   = by;
-  s_bubbleCacheDual = dualSpeaker;
-
-  if (dualSpeaker) {
-    char localLabel[24];
-    char peerLabel[24];
-    char localLine[56];
-    char peerLine[56];
-
-    trimChatLine(g_llm.traits.name, localLabel, sizeof(localLabel), 8);
-    trimChatLine(g_popupPeerName,   peerLabel,  sizeof(peerLabel),  10);
-    trimChatLine(g_popupText,       localLine,  sizeof(localLine),  25);
-    trimChatLine(g_popupPeerText,   peerLine,   sizeof(peerLine),   24);
-
-    tft.fillRoundRect(bx, by, bw, bh, 8, TFT_BLACK);
-    tft.drawRoundRect(bx, by, bw, bh, 8, CHAT_BUBBLE_FRAME_COLOR);
-    tft.fillRoundRect(bx + 4, by + 4,  bw - 8, 17, 5, CHAT_LOCAL_BG_COLOR);
-    tft.fillRoundRect(bx + 4, by + 28, bw - 8, 17, 5, CHAT_PEER_BG_COLOR);
-
-    tft.setTextColor(CHAT_LOCAL_TEXT_COLOR, CHAT_LOCAL_BG_COLOR);
-    tft.setCursor(bx + 8, by + 10);
-    tft.print(localLabel); tft.print(": "); tft.print(localLine);
-
-    tft.setTextColor(CHAT_PEER_TEXT_COLOR, CHAT_PEER_BG_COLOR);
-    tft.setCursor(bx + 8, by + 34);
-    tft.print(peerLabel); tft.print(": "); tft.print(peerLine);
-  } else {
-    tft.fillRoundRect(bx, by, bw, bh, 6, CHAT_LOCAL_BG_COLOR);
-    tft.drawRoundRect(bx, by, bw, bh, 6, CHAT_BUBBLE_FRAME_COLOR);
-    tft.setTextColor(CHAT_LOCAL_TEXT_COLOR, CHAT_LOCAL_BG_COLOR);
-    tft.setCursor(bx + 6, by + 8);
-    char line[48];
-    trimChatLine(g_popupText, line, sizeof(line), 38);
-    tft.print(line);
-  }
-
-  tft.setViewport(GAME_X, GAME_Y, g_gameW, GAME_H);
 }
 
 void processSoundNotifications(unsigned long nowMs) {
