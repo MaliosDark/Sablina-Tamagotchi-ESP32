@@ -32,19 +32,25 @@
 #define TFT_BL_PIN_ALT  -1      // disable fallback to avoid driving the wrong BL path
 #define SCREEN_W       320      // physical pixels after rotation-1 (landscape)
 #define SCREEN_H       172
-// Legacy game canvas  (all original coordinates still valid)
-#define GAME_W         128
-#define GAME_H         128
-#define GAME_X         ((SCREEN_W - GAME_W) / 2 - SIDEBAR_W / 2)  // ~66
-#define GAME_Y         ((SCREEN_H - GAME_H) / 2)                   // ~22
+// Legacy game canvas  (all original coordinates still valid – images are
+// scaled from virtual 128×128 space to GAME_W×GAME_H via pushImageScaled)
+#define GAME_W         234     // matches simulator LEFT_W - 2
+#define GAME_H         157     // matches simulator SCREEN.h - GAME_Y - 1
+#define GAME_X           1     // matches simulator GAME_X (LEFT_X + 1)
+#define GAME_Y          14     // matches simulator GAME_TOPBAR_H + 2
 // Right sidebar
-#define SIDEBAR_X      (GAME_X + GAME_W + 4)   // starts right after game area
-#define SIDEBAR_W       88
+#define SIDEBAR_X      236     // matches simulator RIGHT_X (LEFT_X + LEFT_W)
+#define SIDEBAR_W       84     // matches simulator RIGHT_W (SCREEN_W - 236)
 #define SIDEBAR_H      SCREEN_H
 
 // ── Buttons ───────────────────────────────────────────────────────
-#define BTN_A_PIN        0      // Boot / main confirm
-#define BTN_B_PIN       14      // Secondary / scroll  ← adjust for your board
+// Hardware reality: Waveshare ESP32-S3-LCD-1.47 has ONLY ONE GPIO button.
+//   GPIO0  = BOOT button (the ONLY usable button)
+//   RST    = EN / hardware-reset pin  (NOT readable as GPIO)
+// Both pins are set to 0 here; the virtual button state machine in .ino
+// distinguishes short-press (navigate) from long-press (select/confirm).
+#define BTN_A_PIN        0      // BOOT button – long  press (≥600 ms) = select
+#define BTN_B_PIN        0      // BOOT button – short press (< 600 ms) = navigate
 
 // ── Touch panel ────────────────────────────────────────────────────
 // This firmware currently targets non-touch ST7789 modules.
@@ -144,6 +150,17 @@ const int BRIGHT_LEVELS[] = {120, 260, 420, 620, 820, 1023};
 #define NVS_PET_AGE_H      "pet_age_h"  // uint32 cumulative age in hours
 #define NVS_PET_AGE_D      "pet_age_d"  // uint32 cumulative age in days
 #define NVS_PET_SICK       "pet_sick"    // uint8 1=sick 0=healthy
+// ── Lifetime counters (badges / achievements) ─────────────────────
+#define NVS_LT_FOOD        "lt_food"     // uint32 total food items eaten
+#define NVS_LT_CLEANS      "lt_cleans"   // uint32 total shower/clean actions
+#define NVS_LT_SLEEPS      "lt_sleeps"   // uint32 total sleep sessions
+#define NVS_LT_PETS        "lt_pets"     // uint32 total pet/cuddle actions
+#define NVS_LT_GAMES       "lt_games"    // uint32 total mini-games played
+#define NVS_LT_WINS        "lt_wins"     // uint32 total mini-games won
+#define NVS_LT_COINS_E     "lt_coins_e"  // uint32 total coins ever earned
+#define NVS_LT_COINS_S     "lt_coins_s"  // uint32 total coins ever spent
+#define NVS_LT_SCANS       "lt_scans"    // uint32 total WiFi scans performed
+#define NVS_LT_NETS        "lt_nets"     // uint32 maximum networks found in one scan
 
 // ── Compile-time feature flags ────────────────────────────────────
 #define FEATURE_BLE          1   // enable BLE server

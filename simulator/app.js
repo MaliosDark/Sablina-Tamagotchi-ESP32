@@ -4158,6 +4158,7 @@ function drawTopBar() {
 }
 
 function drawSelectionIndicator() {
+  if (!iconsVisible()) return;  // hide selector when icons are auto-hidden
   const items = twoButtonMenuItems();
   const selected = items[state.twoBtn.cursor];
   if (!selected || state.screen !== screens.HOME || typeof selected.gx !== "number") return;
