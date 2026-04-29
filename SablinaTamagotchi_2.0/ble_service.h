@@ -266,10 +266,11 @@ public:
       _peerOutgoingUntilMs = 0;
       refreshAdvertising();
     }
+    // Async scan (non-blocking) — onResult fires per-device via PeerScanCB
     if (_scan && (now - _lastPeerScanMs) > BLE_PEER_SCAN_INTERVAL_MS) {
       _lastPeerScanMs = now;
-      _scan->start(BLE_PEER_SCAN_DURATION_S, false);
       _scan->clearResults();
+      _scan->start(BLE_PEER_SCAN_DURATION_S, _onScanDone, false);
     }
 #endif
 
@@ -338,7 +339,8 @@ public:
 private:
   BLEAdvertising* _advertising    = nullptr;
   BLEScan*        _scan           = nullptr;
-  unsigned long   _lastPeerScanMs = 0;
+  unsigned long   _lastPeerScanMs     = 0;
+  unsigned long   _scanningUntilMs    = 0;
   unsigned long   _peerOutgoingUntilMs = 0;
   uint16_t        _deviceId       = 0;
   uint8_t         _peerSeq        = 0;
@@ -354,6 +356,9 @@ private:
   static constexpr uint8_t PEER_VERSION       = 0x01;
   static constexpr uint8_t PEER_KIND_SAY      = 0x01;
   static constexpr uint8_t PEER_KIND_REPLY    = 0x02;
+
+  // No-op callback for async scan — results handled per-device via PeerScanCB::onResult
+  static void _onScanDone(BLEScanResults) {}
 
   static bool startsWith(const char* text, const char* prefix) {
     if (!text || !prefix) return false;
@@ -443,14 +448,16 @@ private:
   void refreshAdvertising() {
     if (!_advertising) return;
 
+    // Put name in primary ad packet (always broadcast, no scan request needed)
     BLEAdvertisementData advData;
     advData.setFlags(0x06);
+    advData.setName(_advertisedName);
     if (_peerOutgoing.valid && _peerOutgoing.text[0]) {
       advData.setManufacturerData(buildPeerPayload());
     }
 
+    // Service UUID in scan response
     BLEAdvertisementData scanData;
-    scanData.setName(_advertisedName);
     scanData.setCompleteServices(BLEUUID(BLE_SERVICE_UUID));
 
     _advertising->stop();
