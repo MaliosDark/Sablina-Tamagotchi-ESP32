@@ -309,40 +309,40 @@ The agent selects tools in strict priority order. Colors group tools by category
 
 ```mermaid
 flowchart TD
-    START(["Current State"])
+    START[Current State]
 
-    subgraph CARE ["Pet Care - Critical Needs"]
-        C1{"hunger &lt; 30?"}
-        C2{"rest &lt; 30?"}
-        C3{"hygiene &lt; 30?"}
-        FEED(["feed_pet\nKITCHEN - eat\n+20 hunger"])
-        SLEEP(["sleep_pet\nBEDROOM - rest\n+22 rest"])
-        CLEAN(["clean_pet\nBATHROOM - wash\n+26 hygiene"])
+    subgraph CARE[Pet Care - Critical Needs]
+        C1{hunger below 30?}
+        C2{rest below 30?}
+        C3{hygiene below 30?}
+        FEED[feed_pet<br/>KITCHEN - eat<br/>+20 hunger]
+        SLEEP[sleep_pet<br/>BEDROOM - rest<br/>+22 rest]
+        CLEAN[clean_pet<br/>BATHROOM - wash<br/>+26 hygiene]
     end
 
-    subgraph SOCIAL ["BLE Social"]
-        P1{"peer visible?\nnot last peer?"}
-        PEER(["peer_interact\nBLE notify\ngift or greeting"])
+    subgraph SOCIAL[BLE Social]
+        P1{peer visible and not last peer?}
+        PEER[peer_interact<br/>BLE notify<br/>gift or greeting]
     end
 
-    subgraph WIFI ["WiFi Food Hunt"]
-        W1{"wifi on?\ncoins &lt; 20?"}
-        W2{"wifi on?\nnets > 0?\ncoins >= 20?"}
-        HUNT(["hunt_wifi\nScan APs\n+1 coin/AP"])
-        DEAUTH(["deauth_target\nInject deauth\n+3 coins"])
-        BEACON(["beacon_spam\nFake SSIDs\n+2 coins"])
+    subgraph WIFI[WiFi Food Hunt]
+        W1{wifi on and coins below 20?}
+        W2{wifi on and nets above 0 and coins at least 20?}
+        HUNT[hunt_wifi<br/>Scan APs<br/>+1 coin per AP]
+        DEAUTH[deauth_target<br/>Inject deauth<br/>+3 coins]
+        BEACON[beacon_spam<br/>Fake SSIDs<br/>+2 coins]
     end
 
-    subgraph MODERATE ["Moderate Needs"]
-        M1{"hunger &lt; 50?"}
-        M2{"rest &lt; 50?"}
-        M3{"hygiene &lt; 50?"}
+    subgraph MODERATE[Moderate Needs]
+        M1{hunger below 50?}
+        M2{rest below 50?}
+        M3{hygiene below 50?}
     end
 
-    subgraph DEFAULT ["Default"]
-        SLOT{"minute slot mod 5 = 0?"}
-        STATS(["check_stats\nPopup summary"])
-        PLAY(["play_game\nPLAYROOM - play\n+2 coins"])
+    subgraph DEF[Default]
+        SLOT{minute slot mod 5 equals 0?}
+        STATS[check_stats<br/>Popup summary]
+        PLAY[play_game<br/>PLAYROOM - play<br/>+2 coins]
     end
 
     START --> C1
@@ -372,7 +372,7 @@ flowchart TD
     style SOCIAL fill:#0a0a2a,stroke:#4488ff,color:#cce4ff
     style WIFI fill:#2a0a0a,stroke:#ff4444,color:#ffcccc
     style MODERATE fill:#2a2a00,stroke:#ddbb00,color:#ffeeaa
-    style DEFAULT fill:#1a1a1a,stroke:#888888,color:#dddddd
+    style DEF fill:#1a1a1a,stroke:#888888,color:#dddddd
     style FEED fill:#0d3a0d,stroke:#55cc55,color:#ccffcc
     style SLEEP fill:#0d0d3a,stroke:#5566ff,color:#cce0ff
     style CLEAN fill:#0d3a3a,stroke:#55cccc,color:#ccffff
