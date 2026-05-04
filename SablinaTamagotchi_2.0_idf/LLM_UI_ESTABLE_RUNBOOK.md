@@ -11,6 +11,16 @@ Expected on-device result:
 - Local LLM loaded from SPIFFS.
 - Runtime local generation visible in logs with tok/s.
 
+## 1.1) Tested Versions (Validated)
+
+- ESP-IDF: v5.3.2
+- Arduino component (IDF managed): espressif/arduino-esp32 3.3.8
+- Target chip: ESP32-S3 rev v0.2
+- Memory: 16MB flash, 8MB PSRAM
+- Local model assets: stories260K.bin + tok512.bin
+- Verified SPIFFS mount path for local LLM assets: /spiffs/...
+- Verified flash port in this setup: /dev/ttyACM0
+
 ## 2) Original Problem
 
 There were two competing modes:

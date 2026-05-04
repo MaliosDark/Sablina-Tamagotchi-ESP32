@@ -27,6 +27,8 @@
 
 - [Overview](#-overview)
 - [In Action](#-in-action)
+- [V2 Animation Grid](#-v2-animation-grid)
+- [Tested Versions](#-tested-versions)
 - [ReAct Hybrid Agent](#-react-hybrid-agent)
 - [Social Memory & Bond System](#-social-memory--bond-system)
 - [Telegram Bot](#-telegram-bot)
@@ -63,6 +65,53 @@ Two Sablina devices running side by side, BLE peer detection active, speech bubb
   <img src="Photos/sablina_ble_idle.jpg" width="780" alt="Two Sablina devices idle with BLE peer detected" style="border-radius:10px; margin-bottom:8px;"><br/>
   <em>Both devices powered on, BLE peer bond detected, affinity system active</em>
 </p>
+
+---
+
+## 🎞️ V2 Animations
+
+These GIFs are generated from the current project-owned face assets in `SablinaTamagotchi_2.0/data/faces` (not external borrowed media).
+
+<table align="center">
+    <tr>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-idle.gif" width="180" alt="sablina-idle"><br/><sub>sablina-idle</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-close-up.gif" width="180" alt="sablina-close-up"><br/><sub>sablina-close-up</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-smiling.gif" width="180" alt="sablina-smiling"><br/><sub>sablina-smiling</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-dance.gif" width="180" alt="sablina-dance"><br/><sub>sablina-dance</sub></td>
+    </tr>
+    <tr>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-eating.gif" width="180" alt="sablina-eating"><br/><sub>sablina-eating</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-shower.gif" width="180" alt="sablina-shower"><br/><sub>sablina-shower</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-sleep.gif" width="180" alt="sablina-sleep"><br/><sub>sablina-sleep</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-sad-tired.gif" width="180" alt="sablina-sad-tired"><br/><sub>sablina-sad-tired</sub></td>
+    </tr>
+    <tr>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-crying.gif" width="180" alt="sablina-crying"><br/><sub>sablina-crying</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-screaming.gif" width="180" alt="sablina-screaming"><br/><sub>sablina-screaming</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-hackin.gif" width="180" alt="sablina-hackin"><br/><sub>sablina-hackin</sub></td>
+        <td align="center"></td>
+    </tr>
+</table>
+
+Legacy snapshot link (pre-v2 README rollout):
+- [Commit 239be94](https://github.com/MaliosDark/Sablina-Tamagotchi-ESP32/commit/239be94c2c3ec02afc6f023a17ff3bd2154ad1e2)
+
+---
+
+## ✅ Tested Versions
+
+The following versions/configurations were validated on real hardware during the current integration cycle:
+
+| Component | Tested Version / Value | Notes |
+|---|---|---|
+| ESP-IDF | v5.3.2 | Build and flash verified |
+| Arduino as IDF component | espressif/arduino-esp32 3.3.8 | Stable UI profile |
+| Target SoC | ESP32-S3 (rev v0.2) | USB-Serial/JTAG mode |
+| Flash / PSRAM | 16MB flash / 8MB PSRAM | Detected at boot |
+| Stable firmware profile | `SablinaTamagotchi_2.0_idf` | UI stable + local LLM active |
+| Internal sandbox profile | `SablinaTamagotchi_2.0_idf_internal` | Native internal LLM test profile |
+| Local LLM assets | `stories260K.bin` + `tok512.bin` | Loaded from SPIFFS (`/spiffs/...`) |
+| Flash port | `/dev/ttyACM0` | Verified for build+flash cycles |
 
 ---
 
