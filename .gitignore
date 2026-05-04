@@ -1,6 +1,8 @@
 # ── Secrets (never commit) ──────────────────────────────────────────
 SablinaTamagotchi_2.0/secrets.h
 secrets.h
+.env
+*.env
 
 # ── Arduino build artifacts ──────────────────────────────────────────
 build/
@@ -13,3 +15,7 @@ build/
 
 platform/
 ESP32-S3-LCD-1.47-Demo/
+
+training/
+esp32_models/
+data/canvas.db

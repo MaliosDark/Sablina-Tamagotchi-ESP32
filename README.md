@@ -864,7 +864,7 @@ sequenceDiagram
 - **Dynamic mood**, 7 moods (Happy, Excited, Hungry, Sick, Bored, Curious, Sleepy) derived from live stat values + environment; mood drives the LLM prompt template selection
 - **Coin economy**, Earned from WiFi discoveries (async scan), BLE peer encounters, mini-game scores, shop returns, and passive daily bonuses; spent on Shop wallpapers (10 coins each)
 - **Trait evolution**, Curiosity, Activity, and Stress traits evolve continuously; navigation events raise Activity, WiFi scan events raise Curiosity, prolonged stat-critical states raise Stress; all three modulate the LLM personality and archetype in real time
-- **Lifetime statistics**, NVS-backed persistent counters for food eaten, cleans, sleeps, pets, games played/won, coins earned/spent, WiFi scans, maximum networks found — all survive power cycles and display on the Stats Lifetime page
+- **Lifetime statistics**, NVS-backed persistent counters for food eaten, cleans, sleeps, pets, games played/won, coins earned/spent, WiFi scans, maximum networks found, all survive power cycles and display on the Stats Lifetime page
 
 ### 📡 Environment Awareness
 - **WiFi scanning**, Detects nearby networks; count influences mood and coin income
@@ -880,11 +880,11 @@ sequenceDiagram
 - **Clean/Shower**, Animated shower sequence (+50 CLE); disabled with "No need to shower" message when Cle > 90
 - **Pet, Shake**, Affection inputs; IMU (QMI8658) detects physical shaking and fires a `shaken` personality event through the LLM engine
 - **Room navigation**, Full house map with 5 navigable hotspots accessed via the Rooms (door) icon; each room opens a sub-menu with location-specific actions:
-  - **Kitchen** (red room) — food sub-menu, same 21-item feed selection as the main feed icon
-  - **Bedroom** (gray room) — sleep menu + in-room computer that opens the **Sic Bo dice game** (bet Big/≥7 or Small/≤6 on two revealed dice; +2 coins win, −2 coins loss)
-  - **Bathroom** (blue room) — shower action identical to the main clean icon
-  - **Garden** (green room) — walk+explore sequence: animated forest1/forest2 walk followed by the garden exploration area with coin and item rewards
-  - **Living room** (white room) — central hub and idle home base
+  - **Kitchen** (red room), food sub-menu, same 21-item feed selection as the main feed icon
+  - **Bedroom** (gray room), sleep menu + in-room computer that opens the **Sic Bo dice game** (bet Big/≥7 or Small/≤6 on two revealed dice; +2 coins win, −2 coins loss)
+  - **Bathroom** (blue room), shower action identical to the main clean icon
+  - **Garden** (green room), walk+explore sequence: animated forest1/forest2 walk followed by the garden exploration area with coin and item rewards
+  - **Living room** (white room), central hub and idle home base
 - **Catch the Signal (mini-game)**, 5-round reaction timing game: a colored bar slides across the screen at increasing speed each round; long-press BTN_A when the bar is over the green target zone to "catch" it; scores PERFECT (+3), GOOD (+2), or OK (+1) per round; earns up to 15 coins; boosts the Activity trait; accessible autonomously from the Playroom navigation action
 - **Sic Bo (dice game)**, Available inside the Bedroom via the computer sub-menu; pure betting game on two random dice, ±2 coins per round; exit via the Exit option
 - **Collection Box**, Inventory of all purchased shop pictures; items not yet purchased display "Did not buy"; cycles through all 6 slots with BTN_B
@@ -1228,7 +1228,7 @@ The enclosure is designed for the **ESP32 1.47″ LCD** form factor.
 
 ## 🌐 Platform Canvas Integration
 
-Sablina can report its state to an external **Canvas API server** (e.g. a custom dashboard or logging endpoint) over WiFi. Credentials are provisioned at runtime via BLE commands from the companion app — no hardcoded secrets.
+Sablina can report its state to an external **Canvas API server** (e.g. a custom dashboard or logging endpoint) over WiFi. Credentials are provisioned at runtime via BLE commands from the companion app, no hardcoded secrets.
 
 ### Configuration (via BLE)
 

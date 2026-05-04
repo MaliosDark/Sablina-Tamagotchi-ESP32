@@ -1,0 +1,96 @@
+menu "Sablina Local LLM"
+
+choice SABLINA_LLM_PROFILE
+    prompt "Local LLM profile"
+    default SABLINA_LLM_PROFILE_SUPER_SMALL
+    help
+        Select the local LLM deployment envelope for this firmware build.
+        The repository currently ships the 260K checkpoint, which maps to
+        the super_small profile. The small profile is intended for slightly
+        larger ESP32-S3 targets once a bigger checkpoint is added to /data.
+
+config SABLINA_LLM_PROFILE_SUPER_SMALL
+    bool "super_small (ESP32-S3, current 260K checkpoint)"
+
+config SABLINA_LLM_PROFILE_SMALL
+    bool "small (ESP32-S3 with larger PSRAM and larger checkpoint)"
+
+config SABLINA_LLM_PROFILE_CUSTOM
+    bool "custom (explicit asset paths and budgets)"
+
+endchoice
+
+config SABLINA_LLM_SUPER_SMALL_CHECKPOINT
+    string "super_small checkpoint path"
+    default "/data/stories260K.bin"
+
+config SABLINA_LLM_SUPER_SMALL_TOKENIZER
+    string "super_small tokenizer path"
+    default "/data/tok512.bin"
+
+config SABLINA_LLM_SUPER_SMALL_THINK_STEPS
+    int "super_small think steps"
+    range 8 128
+    default 32
+
+config SABLINA_LLM_SUPER_SMALL_MAX_CHECKPOINT_KB
+    int "super_small checkpoint budget (KB)"
+    range 128 8192
+    default 1152
+
+config SABLINA_LLM_SUPER_SMALL_MIN_FREE_HEAP_KB
+    int "super_small recommended free heap (KB)"
+    range 128 8192
+    default 1024
+
+config SABLINA_LLM_SMALL_CHECKPOINT
+    string "small checkpoint path"
+    default "/data/stories1M.bin"
+
+config SABLINA_LLM_SMALL_TOKENIZER
+    string "small tokenizer path"
+    default "/data/tok512.bin"
+
+config SABLINA_LLM_SMALL_THINK_STEPS
+    int "small think steps"
+    range 8 256
+    default 48
+
+config SABLINA_LLM_SMALL_MAX_CHECKPOINT_KB
+    int "small checkpoint budget (KB)"
+    range 256 16384
+    default 4096
+
+config SABLINA_LLM_SMALL_MIN_FREE_HEAP_KB
+    int "small recommended free heap (KB)"
+    range 256 16384
+    default 3072
+
+config SABLINA_LLM_CUSTOM_NAME
+    string "custom profile name"
+    default "custom"
+
+config SABLINA_LLM_CUSTOM_CHECKPOINT
+    string "custom checkpoint path"
+    default "/data/custom.bin"
+
+config SABLINA_LLM_CUSTOM_TOKENIZER
+    string "custom tokenizer path"
+    default "/data/tok512.bin"
+
+config SABLINA_LLM_CUSTOM_THINK_STEPS
+    int "custom think steps"
+    range 8 256
+    default 32
+
+config SABLINA_LLM_CUSTOM_MAX_CHECKPOINT_KB
+    int "custom checkpoint budget (KB)"
+    range 128 65536
+    default 1024
+
+config SABLINA_LLM_CUSTOM_MIN_FREE_HEAP_KB
+    int "custom recommended free heap (KB)"
+    range 128 65536
+    default 1024
+
+endmenu

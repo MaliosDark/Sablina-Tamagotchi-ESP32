@@ -9,6 +9,7 @@
 //    Adafruit NeoPixel  (for RGB LED)
 // ═══════════════════════════════════════════════════════════════════
 #include <SPI.h>
+#include <SPIFFS.h>
 #include <TFT_eSPI.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -18,12 +19,17 @@
 #include "imu_handler.h"
 #include "llm_personality.h"
 #include "ble_service.h"
-#if FEATURE_WIFI_AUDIT
 #include "wifi_audit.h"
-#endif
 #if FEATURE_TELEGRAM
 #include "telegram_bot.h"
 #endif
+
+// Keep large sprite tables in flash-mapped rodata for IDF linking.
+#ifdef PROGMEM
+#undef PROGMEM
+#define PROGMEM
+#endif
+
 #include "pest.h"
 #include "weber.h"
 #include "baby.h"
@@ -37,7 +43,6 @@
 #include "watercooler.h"
 #include "salida.h"
 #include "warn.h"
-#include "sablinagif.h"
 #include "sablinaeat.h"
 #include "sablinaeat2.h"
 #include "sablinaeat3.h"
@@ -173,12 +178,10 @@ LLMPersonality    g_llm;
 SablinaBLE         g_ble;
 IMUHandler        g_imu;
 Adafruit_NeoPixel g_rgb(1, RGB_PIN, NEO_GRB + NEO_KHZ800);
-#if FEATURE_WIFI_AUDIT
 WifiAudit         g_wifiAudit;
 bool              g_auditScreenActive  = false;
 uint8_t           g_auditSelectedAP    = 0;
 unsigned long     g_lastAuditDraw      = 0;
-#endif
 #if FEATURE_TELEGRAM
 TelegramBot       g_tg;
 #endif
@@ -222,6 +225,58 @@ bool          g_navActive        = false;  // true while autonomous walk/action 
 bool          g_idleFirstFrame   = true;   // clear once when entering idle
 bool          g_idleFrameDrawn   = false;  // set by maingif each new frame; bubble redraws on top
 
+constexpr int16_t FACE_IDLE_VX = 0;
+constexpr int16_t FACE_IDLE_VY = 20;
+constexpr int16_t FACE_IDLE_VW = 128;
+constexpr int16_t FACE_IDLE_VH = 88;
+constexpr size_t  FACE_FRAME_WORDS = (size_t)FACE_IDLE_VW * FACE_IDLE_VH;
+constexpr size_t  FACE_FRAME_BYTES = FACE_FRAME_WORDS * sizeof(uint16_t);
+constexpr uint16_t FACE_VIDEO_FRAME_COUNT = 30;
+constexpr uint16_t FACE_VIDEO_FRAME_DELAY_MS = 200;
+
+enum FaceClipId {
+  FACE_CLIP_IDLE = 0,
+  FACE_CLIP_SMILING,
+  FACE_CLIP_CRYING,
+  FACE_CLIP_DANCE,
+  FACE_CLIP_EATING,
+  FACE_CLIP_HACKIN,
+  FACE_CLIP_SAD_TIRED,
+  FACE_CLIP_SCREAMING,
+  FACE_CLIP_SHOWER,
+  FACE_CLIP_SLEEP,
+  FACE_CLIP_CLOSEUP,
+  FACE_CLIP_COUNT
+};
+
+struct FaceClipSpec {
+  const char* path;
+  uint16_t frames;
+  uint16_t frameDelayMs;
+};
+
+static const FaceClipSpec kFaceClips[FACE_CLIP_COUNT] = {
+  { "/faces/sablina-idle.rgb565",       FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-smiling.rgb565",    FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-crying.rgb565",     FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-dance.rgb565",      FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-eating.rgb565",     FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-hackin.rgb565",     FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-sad-tired.rgb565",  FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-screaming.rgb565",  FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-shower.rgb565",     FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-sleep.rgb565",      FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+  { "/faces/sablina-close-up.rgb565",   FACE_VIDEO_FRAME_COUNT, FACE_VIDEO_FRAME_DELAY_MS },
+};
+
+bool                g_facesFsReady       = false;
+uint16_t*           g_faceFrameBuf       = nullptr;
+File                g_faceClipFile;
+int8_t              g_activeFaceClip     = -1;
+uint16_t            g_activeFaceFrame    = 0;
+unsigned long       g_activeFaceLastMs   = 0;
+bool                g_activeFaceHasFrame = false;
+
 // ── WiFi passive scan (autonomous) ───────────────────────────────
 unsigned long g_lastWifiScanMs   = 0;      // last time async WiFi scan was started
 bool          g_wifiScanPending  = false;  // async scan in progress
@@ -257,7 +312,191 @@ struct LifetimeStats {
 };
 LifetimeStats g_lifetime;
 
+// Forward declarations for globals referenced by early helper functions.
+extern int Hun, Fat, Cle;
+
 // ── Trait Evolution ──────────────────────────────────────────────────
+
+bool shouldShowWarnIcon(unsigned long now) {
+  bool showWarn = (Hun < 60 || Fat < 60 || Cle < 60) || g_petSick;
+  if (g_petSick && (now / 500) % 2 == 0) showWarn = false;
+  return showWarn;
+}
+
+bool faceClipAvailable(int clipIndex) {
+  return g_facesFsReady && clipIndex >= 0 && clipIndex < FACE_CLIP_COUNT && SPIFFS.exists(kFaceClips[clipIndex].path);
+}
+
+void closeFaceClip() {
+  if (g_faceClipFile) g_faceClipFile.close();
+  g_activeFaceClip = -1;
+  g_activeFaceFrame = 0;
+  g_activeFaceLastMs = 0;
+  g_activeFaceHasFrame = false;
+}
+
+bool selectFaceClip(int clipIndex) {
+  if (clipIndex == g_activeFaceClip && g_faceClipFile) return true;
+  closeFaceClip();
+  if (!faceClipAvailable(clipIndex)) return false;
+  const FaceClipSpec& clip = kFaceClips[clipIndex];
+  g_faceClipFile = SPIFFS.open(clip.path, FILE_READ);
+  if (!g_faceClipFile) {
+    Serial.printf("[faces] open failed: %s\n", clip.path);
+    return false;
+  }
+  g_activeFaceClip = clipIndex;
+  return true;
+}
+
+bool loadActiveFaceFrame() {
+  if (g_activeFaceClip < 0 || !g_faceClipFile || !g_faceFrameBuf) return false;
+  const FaceClipSpec& clip = kFaceClips[g_activeFaceClip];
+
+  const size_t offset = (size_t)g_activeFaceFrame * FACE_FRAME_BYTES;
+  if (!g_faceClipFile.seek(offset, SeekSet)) {
+    Serial.printf("[faces] seek failed: %s @ %u\n", clip.path, (unsigned)g_activeFaceFrame);
+    return false;
+  }
+
+  const size_t bytesRead = g_faceClipFile.read((uint8_t*)g_faceFrameBuf, FACE_FRAME_BYTES);
+  if (bytesRead != FACE_FRAME_BYTES) {
+    Serial.printf("[faces] short read: %s (%u/%u)\n",
+                  clip.path,
+                  (unsigned)bytesRead,
+                  (unsigned)FACE_FRAME_BYTES);
+    return false;
+  }
+
+  g_activeFaceFrame = (g_activeFaceFrame + 1) % clip.frames;
+  g_activeFaceHasFrame = true;
+  return true;
+}
+
+int currentIdleFaceClip() {
+  int clip = FACE_CLIP_IDLE;
+
+  if (g_petSick || Hun < 18 || Fat < 18 || Cle < 18) {
+    clip = FACE_CLIP_SCREAMING;
+  }
+#if FEATURE_WIFI_AUDIT
+  else if (g_wifiScanPending || g_auditScreenActive) {
+    clip = FACE_CLIP_HACKIN;
+  }
+#endif
+  else {
+    switch (g_llm.currentMood) {
+      case MOOD_HAPPY:
+        clip = FACE_CLIP_SMILING;
+        break;
+      case MOOD_HUNGRY:
+        clip = (Hun < 35) ? FACE_CLIP_EATING : FACE_CLIP_CLOSEUP;
+        break;
+      case MOOD_TIRED:
+        clip = (Fat < 30) ? FACE_CLIP_SLEEP : FACE_CLIP_SAD_TIRED;
+        break;
+      case MOOD_DIRTY:
+        clip = FACE_CLIP_SHOWER;
+        break;
+      case MOOD_BORED:
+        clip = FACE_CLIP_IDLE;
+        break;
+      case MOOD_PLAYFUL:
+        clip = FACE_CLIP_DANCE;
+        break;
+      case MOOD_SAD:
+        clip = FACE_CLIP_CRYING;
+        break;
+      case MOOD_EXCITED:
+        clip = FACE_CLIP_HACKIN;
+        break;
+    }
+  }
+
+  if (faceClipAvailable(clip)) return clip;
+  if (clip != FACE_CLIP_IDLE && faceClipAvailable(FACE_CLIP_IDLE)) {
+    return FACE_CLIP_IDLE;
+  }
+  return -1;
+}
+
+bool nextIdleFaceFrame(unsigned long now, const uint16_t** frameOut) {
+  *frameOut = nullptr;
+
+  int desiredClip = currentIdleFaceClip();
+  if (desiredClip < 0) {
+    closeFaceClip();
+    return false;
+  }
+
+  if (!selectFaceClip(desiredClip)) return false;
+
+  if (g_activeFaceHasFrame && (now - g_activeFaceLastMs) < kFaceClips[g_activeFaceClip].frameDelayMs) {
+    return true;
+  }
+
+  if (!loadActiveFaceFrame()) {
+    closeFaceClip();
+    return false;
+  }
+
+  g_activeFaceLastMs = now;
+  *frameOut = g_faceFrameBuf;
+  return true;
+}
+
+void drawIdleFrameClipped(const uint16_t* img, int16_t vx, int16_t vy, int16_t vw, int16_t vh) {
+  if (!img) return;
+
+  if (g_iconsShown) {
+    const int16_t dx = GAME_X + (int32_t)vx * g_gameW / 128;
+    const int16_t dy = GAME_Y + (int32_t)vy * GAME_H / 128;
+    const int16_t dw = (int16_t)max((int32_t)1,
+      (int32_t)(vx + vw) * g_gameW / 128 - (int32_t)vx * g_gameW / 128);
+    const int16_t dh = (int16_t)max((int32_t)1,
+      (int32_t)(vy + vh) * GAME_H / 128 - (int32_t)vy * GAME_H / 128);
+    const int16_t clipPY0 = GAME_Y + (int32_t)30 * GAME_H / 128;
+    const int16_t clipPY1 = GAME_Y + (int32_t)96 * GAME_H / 128;
+    const int16_t yStart = max((int16_t)0, (int16_t)(clipPY0 - dy));
+    const int16_t yEnd = min(dh, (int16_t)(clipPY1 - dy));
+
+    if (yEnd > yStart) {
+      tft.resetViewport();
+      tft.startWrite();
+      tft.setAddrWindow(dx, dy + yStart, dw, yEnd - yStart);
+      for (int y = yStart; y < yEnd; y++) {
+        const int sy = (int32_t)y * vh / dh;
+        const uint16_t* row = img + (int32_t)sy * vw;
+        for (int x = 0; x < dw; x++) {
+          _pis_rowbuf[x] = row[(int32_t)x * vw / dw];
+        }
+        tft.pushColors(_pis_rowbuf, dw, true);
+      }
+      tft.endWrite();
+      tft.setViewport(GAME_X, GAME_Y, g_gameW, GAME_H);
+    }
+    return;
+  }
+
+  pushImageScaled(vx, vy, vw, vh, img);
+}
+
+void initIdleFacePlayer() {
+  g_facesFsReady = SPIFFS.begin(true);
+  if (!g_facesFsReady) {
+    Serial.println("[faces] SPIFFS mount failed; using built-in idle gif");
+    return;
+  }
+
+  g_faceFrameBuf = (uint16_t*)malloc(FACE_FRAME_BYTES);
+  if (!g_faceFrameBuf) {
+    Serial.println("[faces] frame buffer alloc failed; using built-in idle gif");
+    return;
+  }
+
+  Serial.printf("[faces] SPIFFS ready, idle asset %s\n",
+                faceClipAvailable(FACE_CLIP_IDLE) ? "found" : "missing");
+}
 // curiosity  0-100 : rises when WiFi/BLE events happen, decays slowly
 // activity   0-100 : rises when pet moves/plays, decays toward 50
 // stress     0-100 : rises when stats are critical, decays when cared for
@@ -343,6 +582,7 @@ void tickTraitEvolution(unsigned long nowMs);
 void tickDayNight(unsigned long nowMs);
 void applyDarkMode(bool enable);
 void runMiniGame(unsigned long nowMs);
+void drawAuditScreen();
 
 // ── Virtual single-button state machine ─────────────────────────────────────
 // Hardware reality: only GPIO0 (BOOT) is a real button.  RST = hardware EN.
@@ -513,7 +753,7 @@ char buff[512];
 // Draw the 8 menu icons without clearing the background.
 // Call this when only the icon rows need to be (re)drawn.
 void drawIconsOnly() {
-  if(Hun < 60 || Fat < 60 || Cle < 60)
+  if (shouldShowWarnIcon(millis()))
     pushImageScaled(2, 1, 28, 28, warn);
   else
     pushImageScaled(2, 1, 28, 28, pest);
@@ -2146,10 +2386,23 @@ void maingif()
 
   static unsigned long lastPetFrame = 0;
   unsigned long now = millis();
+  const uint16_t* idleImage = nullptr;
+  int16_t idleVX = 14;
+  int16_t idleVY = 14;
+  int16_t idleVW = 100;
+  int16_t idleVH = 100;
 
-  if (now - lastPetFrame < 150) return;
-  lastPetFrame = now;
-  idleFrame = (idleFrame + 1) % 41;
+  if (nextIdleFaceFrame(now, &idleImage)) {
+    if (!idleImage) return;
+    idleVX = FACE_IDLE_VX;
+    idleVY = FACE_IDLE_VY;
+    idleVW = FACE_IDLE_VW;
+    idleVH = FACE_IDLE_VH;
+  } else {
+    // In IDF bridge mode we require SPIFFS clips; skip drawing when unavailable.
+    return;
+  }
+
   g_idleFrameDrawn = true;  // signal bubble to redraw on top this tick
 
   // One-time clear of the middle zone when entering idle
@@ -2162,41 +2415,7 @@ void maingif()
     tft.setViewport(GAME_X, GAME_Y, g_gameW, GAME_H);
   }
 
-  if (g_iconsShown) {
-    // Icons visible: clip the sprite draw to virtual y=[30,96) so we NEVER write
-    // into the icon rows above (y<30) or below (y>=96). Icons stay pristine, no flicker,
-    // and the sprite is naturally "behind" the buttons with no redraw needed.
-    const int16_t vx = 14, vy = 14, vw = 100, vh = 100;
-    int16_t dx = GAME_X + (int32_t)vx * g_gameW / 128;
-    int16_t dy = GAME_Y + (int32_t)vy * GAME_H / 128;
-    int16_t dw = (int16_t)max((int32_t)1,
-      (int32_t)(vx + vw) * g_gameW / 128 - (int32_t)vx * g_gameW / 128);
-    int16_t dh = (int16_t)max((int32_t)1,
-      (int32_t)(vy + vh) * GAME_H / 128 - (int32_t)vy * GAME_H / 128);
-    // Physical row range that falls inside the safe middle zone
-    int16_t clipPY0 = GAME_Y + (int32_t)30 * GAME_H / 128;
-    int16_t clipPY1 = GAME_Y + (int32_t)96 * GAME_H / 128;
-    int16_t yStart  = max((int16_t)0,  (int16_t)(clipPY0 - dy));
-    int16_t yEnd    = min(dh,           (int16_t)(clipPY1 - dy));
-    if (yEnd > yStart) {
-      tft.resetViewport();
-      tft.startWrite();
-      tft.setAddrWindow(dx, dy + yStart, dw, yEnd - yStart);
-      for (int y = yStart; y < yEnd; y++) {
-        int sy = (int32_t)y * vh / dh;
-        const uint16_t* row = sablinagif[idleFrame] + (int32_t)sy * vw;
-        for (int x = 0; x < dw; x++) {
-          _pis_rowbuf[x] = row[(int32_t)x * vw / dw];
-        }
-        tft.pushColors(_pis_rowbuf, dw, true);
-      }
-      tft.endWrite();
-      tft.setViewport(GAME_X, GAME_Y, g_gameW, GAME_H);
-    }
-  } else {
-    // Icons hidden: draw full sprite, no icon zones to protect
-    pushImageScaled(14, 14, 100, 100, sablinagif[idleFrame]);
-  }
+  drawIdleFrameClipped(idleImage, idleVX, idleVY, idleVW, idleVH);
 }
 
 void Sleep()
@@ -5454,8 +5673,8 @@ void setup()
   g_prefs.begin(NVS_NS, false);
   strlcpy(g_wifiSSID, g_prefs.getString(NVS_WIFI_SSID, WIFI_SSID_DEFAULT).c_str(), sizeof(g_wifiSSID));
   strlcpy(g_wifiPass, g_prefs.getString(NVS_WIFI_PASS, WIFI_PASS_DEFAULT).c_str(), sizeof(g_wifiPass));
-  strlcpy(g_platformUrl, g_prefs.getString(NVS_PLATFORM_URL, "").c_str(), sizeof(g_platformUrl));
-  strlcpy(g_platformKey, g_prefs.getString(NVS_PLATFORM_KEY, "").c_str(), sizeof(g_platformKey));
+  strlcpy(g_platformUrl, g_prefs.getString(NVS_PLATFORM_URL, CANVAS_URL_DEFAULT).c_str(), sizeof(g_platformUrl));
+  strlcpy(g_platformKey, g_prefs.getString(NVS_PLATFORM_KEY, CANVAS_KEY_DEFAULT).c_str(), sizeof(g_platformKey));
   // Restore stat offsets
   Hun_mas = g_prefs.getInt(NVS_HUN_MAS, 0);
   Fat_mas = g_prefs.getInt(NVS_FAT_MAS, 0);
@@ -5486,6 +5705,7 @@ void setup()
   g_lastAgeTickMs        = millis();
   g_iconsLastInteractMs  = millis();  // start with icons visible
   loadSocialMemory();
+  initIdleFacePlayer();
 
   // ── Display ────────────────────────────────────────────────────
   tft.begin();
@@ -5638,8 +5858,7 @@ void loop()
   }
 
   // ── Warn icon: blink when sick (only while icons are visible) ────
-  bool showWarn = (Hun < 60 || Fat < 60 || Cle < 60) || g_petSick;
-  if (g_petSick && (now / 500) % 2 == 0) showWarn = false; // blink
+  bool showWarn = shouldShowWarnIcon(now);
   if (iconsActive)
   {
     if (showWarn)

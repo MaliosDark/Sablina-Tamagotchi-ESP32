@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/CMakeFiles/bootloader
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/CMakeFiles/bootloader.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/CMakeFiles/bootloader-complete.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/nexland/Mikuru_Tamagotchi_ESP32/SablinaTamagotchi_2.0_idf/build-internal/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
