@@ -14,13 +14,66 @@
 #include "config.h"
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#if FEATURE_BLE
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#endif
 #include <ctype.h>
 // esp_ble_gap_config_adv_data_raw is available via BLEDevice.h → esp_gap_ble_api.h
+
+#if !FEATURE_BLE
+
+struct BLECommand {
+  bool  pending  = false;
+  char  cmd[32]  = "";
+};
+volatile BLECommand g_bleCmd;
+
+struct BLEPeerState {
+  bool          visible     = false;
+  int           rssi        = -127;
+  unsigned long lastSeenMs  = 0;
+  uint16_t      senderId    = 0;
+  uint8_t       lastMsgSeq  = 0;
+  uint8_t       lastReplyTo = 0;
+  bool          lastWasReply= false;
+  char          name[24]    = "";
+};
+
+struct BLEPeerMessage {
+  bool     valid    = false;
+  bool     isReply  = false;
+  uint16_t senderId = 0;
+  uint8_t  seq      = 0;
+  uint8_t  replyTo  = 0;
+  char     text[BLE_PEER_MESSAGE_MAX_TEXT + 1] = "";
+};
+
+class SablinaBLE {
+public:
+  bool deviceConnected = false;
+  bool prevConnected   = false;
+  struct DummyChar { void setValue(const char*) {} };
+  DummyChar* pStateChar       = nullptr;
+  DummyChar* pLlmRespChar     = nullptr;
+  DummyChar* pPersonalityChar = nullptr;
+  BLEPeerState peer;
+
+  void begin(const char* = nullptr) {}
+  void tick() {}
+  void notifyState(int, int, int, int, const char*, bool, bool, bool) {}
+  void notifyLlmResponse(const char*) {}
+  bool peerVisible() const { return false; }
+  const char* peerName() const { return "none"; }
+  bool queuePeerMessage(const char*, bool = false, uint8_t = 0) { return false; }
+  bool takeIncomingPeerMessage(BLEPeerMessage*) { return false; }
+  uint8_t lastQueuedPeerSeq() const { return 0; }
+};
+
+#else
 
 // Forward declaration of globals the BLE callbacks need to access
 // (defined in main .ino)
@@ -580,3 +633,5 @@ private:
     peer.visible = true;
   }
 };
+
+#endif  // FEATURE_BLE

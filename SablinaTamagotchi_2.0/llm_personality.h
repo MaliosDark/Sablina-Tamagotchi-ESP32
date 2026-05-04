@@ -12,6 +12,19 @@
 #include <Preferences.h>
 #include <cstring>
 
+#if defined(__has_include)
+#if __has_include("internal_llm_bridge.h")
+extern "C" {
+#include "internal_llm_bridge.h"
+}
+#define SABLINA_INTERNAL_LLM_BRIDGE 1
+#else
+#define SABLINA_INTERNAL_LLM_BRIDGE 0
+#endif
+#else
+#define SABLINA_INTERNAL_LLM_BRIDGE 0
+#endif
+
 // ── Mood enum (drives RGB LED + display reactions) ─────────────────
 enum PetMood {
   MOOD_HAPPY    = 0,
@@ -46,6 +59,9 @@ public:
     _prefs = prefs;
     _loadConfig();
     _loadTraits();
+#if SABLINA_INTERNAL_LLM_BRIDGE
+    _internalReady = internal_llm_begin();
+#endif
   }
 
   // ── Call from loop() – non-blocking via flag ────────────────────
@@ -381,6 +397,7 @@ private:
   char  _model[48]    = LLM_MODEL_DEFAULT;
   bool  _llmEnabled   = false;
   bool  _forceOffline = false;
+  bool  _internalReady = false;
   unsigned long _lastLlmCall = 0;
   unsigned long _lastOfflineThought = 0;
 
@@ -472,6 +489,10 @@ private:
   }
 
   void _offlineAutonomousThought(int hun, int fat, int cle, int exp) {
+    if (_tryInternalThought(nullptr, hun, fat, cle, exp)) {
+      return;
+    }
+
     const char* petState = _derivePetState(hun, fat, cle);
 
     if (strcmp(petState, "critical") == 0) {
@@ -561,6 +582,10 @@ private:
 
   // ── Offline fallback responses ──────────────────────────────────
   void _offlineReact(const char* event, int hun, int fat, int cle) {
+    if (_tryInternalThought(event, hun, fat, cle, 0)) {
+      return;
+    }
+
     (void)hun;
     (void)fat;
     (void)cle;
@@ -619,6 +644,39 @@ private:
       };
       _emitOfflineFromOptions(lines, 3);
     }
+  }
+
+  bool _tryInternalThought(const char* event, int hun, int fat, int cle, int exp) {
+#if SABLINA_INTERNAL_LLM_BRIDGE
+    if (!_internalReady && !internal_llm_is_ready()) {
+      return false;
+    }
+
+    char prompt[220];
+    if (event && event[0]) {
+      snprintf(prompt, sizeof(prompt),
+        "%s feels %s after %s. hunger:%d fatigue:%d clean:%d coins:%d. Say one short sentence.",
+        traits.name,
+        _derivePetState(hun, fat, cle),
+        event,
+        hun, fat, cle, exp);
+    } else {
+      snprintf(prompt, sizeof(prompt),
+        "%s current state is %s. hunger:%d fatigue:%d clean:%d coins:%d. Say one short sentence.",
+        traits.name,
+        _derivePetState(hun, fat, cle),
+        hun, fat, cle, exp);
+    }
+
+    char out[256];
+    if (internal_llm_generate(prompt, 24, out, sizeof(out)) && out[0]) {
+      _normalizeResponseText(out, lastResponse, sizeof(lastResponse));
+      _rememberOfflineLine(lastResponse);
+      responseReady = true;
+      return true;
+    }
+#endif
+    return false;
   }
 
   // ── WiFi LLM call (blocking, call from non-UI task or accept lag) ─

@@ -163,8 +163,8 @@ const int BRIGHT_LEVELS[] = {120, 260, 420, 620, 820, 1023};
 #define NVS_LT_NETS        "lt_nets"     // uint32 maximum networks found in one scan
 
 // ── Compile-time feature flags ────────────────────────────────────
-#define FEATURE_BLE          1   // enable BLE server
-#define FEATURE_BLE_PEERS    1   // discover nearby Sablinas over BLE advertising
+#define FEATURE_BLE          0   // temporarily disabled for Arduino->IDF bridge bring-up
+#define FEATURE_BLE_PEERS    0   // temporarily disabled for Arduino->IDF bridge bring-up
 #define FEATURE_WIFI_LLM     1   // enable WiFi + LLM calls
 #define FEATURE_IMU          1   // enable QMI8658 shake detection
 #define FEATURE_RGB          1   // enable RGB mood LED
@@ -223,7 +223,7 @@ const int BRIGHT_LEVELS[] = {120, 260, 420, 620, 820, 1023};
 #define BL_DARKMODE_IDX      1
 
 // ── WiFi Security Audit ───────────────────────────────────────────
-#define FEATURE_WIFI_AUDIT   1   // enable WiFi pentesting module
+#define FEATURE_WIFI_AUDIT   0   // temporarily disabled for Arduino->IDF bridge bring-up
 // Channel hop interval (ms) during scanning
 #define WIFI_AUDIT_HOP_MS   200
 // Number of deauth frames per burst

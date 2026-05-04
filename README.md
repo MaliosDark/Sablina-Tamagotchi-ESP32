@@ -27,6 +27,8 @@
 
 - [Overview](#-overview)
 - [In Action](#-in-action)
+- [V2 Animation Grid](#-v2-animation-grid)
+- [Tested Versions](#-tested-versions)
 - [ReAct Hybrid Agent](#-react-hybrid-agent)
 - [Social Memory & Bond System](#-social-memory--bond-system)
 - [Telegram Bot](#-telegram-bot)
@@ -63,6 +65,53 @@ Two Sablina devices running side by side, BLE peer detection active, speech bubb
   <img src="Photos/sablina_ble_idle.jpg" width="780" alt="Two Sablina devices idle with BLE peer detected" style="border-radius:10px; margin-bottom:8px;"><br/>
   <em>Both devices powered on, BLE peer bond detected, affinity system active</em>
 </p>
+
+---
+
+## 🎞️ V2 Animations
+
+These GIFs are generated from the current project-owned face assets in `SablinaTamagotchi_2.0/data/faces` (not external borrowed media).
+
+<table align="center">
+    <tr>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-idle.gif" width="180" alt="sablina-idle"><br/><sub>sablina-idle</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-close-up.gif" width="180" alt="sablina-close-up"><br/><sub>sablina-close-up</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-smiling.gif" width="180" alt="sablina-smiling"><br/><sub>sablina-smiling</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-dance.gif" width="180" alt="sablina-dance"><br/><sub>sablina-dance</sub></td>
+    </tr>
+    <tr>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-eating.gif" width="180" alt="sablina-eating"><br/><sub>sablina-eating</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-shower.gif" width="180" alt="sablina-shower"><br/><sub>sablina-shower</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-sleep.gif" width="180" alt="sablina-sleep"><br/><sub>sablina-sleep</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-sad-tired.gif" width="180" alt="sablina-sad-tired"><br/><sub>sablina-sad-tired</sub></td>
+    </tr>
+    <tr>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-crying.gif" width="180" alt="sablina-crying"><br/><sub>sablina-crying</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-screaming.gif" width="180" alt="sablina-screaming"><br/><sub>sablina-screaming</sub></td>
+        <td align="center"><img src="Photos/assets_v2_gifs/sablina-hackin.gif" width="180" alt="sablina-hackin"><br/><sub>sablina-hackin</sub></td>
+        <td align="center"></td>
+    </tr>
+</table>
+
+Legacy snapshot link (pre-v2 README rollout):
+- [Commit 239be94](https://github.com/MaliosDark/Sablina-Tamagotchi-ESP32/commit/239be94c2c3ec02afc6f023a17ff3bd2154ad1e2)
+
+---
+
+## ✅ Tested Versions
+
+The following versions/configurations were validated on real hardware during the current integration cycle:
+
+| Component | Tested Version / Value | Notes |
+|---|---|---|
+| ESP-IDF | v5.3.2 | Build and flash verified |
+| Arduino as IDF component | espressif/arduino-esp32 3.3.8 | Stable UI profile |
+| Target SoC | ESP32-S3 (rev v0.2) | USB-Serial/JTAG mode |
+| Flash / PSRAM | 16MB flash / 8MB PSRAM | Detected at boot |
+| Stable firmware profile | `SablinaTamagotchi_2.0_idf` | UI stable + local LLM active |
+| Internal sandbox profile | `SablinaTamagotchi_2.0_idf_internal` | Native internal LLM test profile |
+| Local LLM assets | `stories260K.bin` + `tok512.bin` | Loaded from SPIFFS (`/spiffs/...`) |
+| Flash port | `/dev/ttyACM0` | Verified for build+flash cycles |
 
 ---
 
@@ -864,7 +913,7 @@ sequenceDiagram
 - **Dynamic mood**, 7 moods (Happy, Excited, Hungry, Sick, Bored, Curious, Sleepy) derived from live stat values + environment; mood drives the LLM prompt template selection
 - **Coin economy**, Earned from WiFi discoveries (async scan), BLE peer encounters, mini-game scores, shop returns, and passive daily bonuses; spent on Shop wallpapers (10 coins each)
 - **Trait evolution**, Curiosity, Activity, and Stress traits evolve continuously; navigation events raise Activity, WiFi scan events raise Curiosity, prolonged stat-critical states raise Stress; all three modulate the LLM personality and archetype in real time
-- **Lifetime statistics**, NVS-backed persistent counters for food eaten, cleans, sleeps, pets, games played/won, coins earned/spent, WiFi scans, maximum networks found — all survive power cycles and display on the Stats Lifetime page
+- **Lifetime statistics**, NVS-backed persistent counters for food eaten, cleans, sleeps, pets, games played/won, coins earned/spent, WiFi scans, maximum networks found, all survive power cycles and display on the Stats Lifetime page
 
 ### 📡 Environment Awareness
 - **WiFi scanning**, Detects nearby networks; count influences mood and coin income
@@ -880,11 +929,11 @@ sequenceDiagram
 - **Clean/Shower**, Animated shower sequence (+50 CLE); disabled with "No need to shower" message when Cle > 90
 - **Pet, Shake**, Affection inputs; IMU (QMI8658) detects physical shaking and fires a `shaken` personality event through the LLM engine
 - **Room navigation**, Full house map with 5 navigable hotspots accessed via the Rooms (door) icon; each room opens a sub-menu with location-specific actions:
-  - **Kitchen** (red room) — food sub-menu, same 21-item feed selection as the main feed icon
-  - **Bedroom** (gray room) — sleep menu + in-room computer that opens the **Sic Bo dice game** (bet Big/≥7 or Small/≤6 on two revealed dice; +2 coins win, −2 coins loss)
-  - **Bathroom** (blue room) — shower action identical to the main clean icon
-  - **Garden** (green room) — walk+explore sequence: animated forest1/forest2 walk followed by the garden exploration area with coin and item rewards
-  - **Living room** (white room) — central hub and idle home base
+  - **Kitchen** (red room), food sub-menu, same 21-item feed selection as the main feed icon
+  - **Bedroom** (gray room), sleep menu + in-room computer that opens the **Sic Bo dice game** (bet Big/≥7 or Small/≤6 on two revealed dice; +2 coins win, −2 coins loss)
+  - **Bathroom** (blue room), shower action identical to the main clean icon
+  - **Garden** (green room), walk+explore sequence: animated forest1/forest2 walk followed by the garden exploration area with coin and item rewards
+  - **Living room** (white room), central hub and idle home base
 - **Catch the Signal (mini-game)**, 5-round reaction timing game: a colored bar slides across the screen at increasing speed each round; long-press BTN_A when the bar is over the green target zone to "catch" it; scores PERFECT (+3), GOOD (+2), or OK (+1) per round; earns up to 15 coins; boosts the Activity trait; accessible autonomously from the Playroom navigation action
 - **Sic Bo (dice game)**, Available inside the Bedroom via the computer sub-menu; pure betting game on two random dice, ±2 coins per round; exit via the Exit option
 - **Collection Box**, Inventory of all purchased shop pictures; items not yet purchased display "Did not buy"; cycles through all 6 slots with BTN_B
@@ -1228,7 +1277,7 @@ The enclosure is designed for the **ESP32 1.47″ LCD** form factor.
 
 ## 🌐 Platform Canvas Integration
 
-Sablina can report its state to an external **Canvas API server** (e.g. a custom dashboard or logging endpoint) over WiFi. Credentials are provisioned at runtime via BLE commands from the companion app — no hardcoded secrets.
+Sablina can report its state to an external **Canvas API server** (e.g. a custom dashboard or logging endpoint) over WiFi. Credentials are provisioned at runtime via BLE commands from the companion app, no hardcoded secrets.
 
 ### Configuration (via BLE)
 
